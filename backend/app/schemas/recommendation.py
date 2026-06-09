@@ -21,3 +21,5 @@ class RecommendationResponse(BaseModel):
     reason: str | None = None
     created_at: datetime
     course: CourseResponse | None = None
+    algorithm_used: str | None = None
+

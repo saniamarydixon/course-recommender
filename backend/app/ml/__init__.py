@@ -1,3 +1,1 @@
-from app.ml.recommender import CourseRecommender
-
-__all__ = ["CourseRecommender"]
+# backend/app/ml/__init__.py

@@ -18,10 +18,12 @@ def recommendations_test():
 @router.post("/generate", response_model=list[RecommendationResponse])
 def generate_recommendations(
     params: RecommendationRequest,
+    algorithm: str = "hybrid",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return RecommendationService(db).get_user_recommendations(current_user, params)
+    return RecommendationService(db).get_user_recommendations(current_user, params, algorithm)
+
 
 
 @router.get("/history", response_model=list[RecommendationResponse])

@@ -71,7 +71,14 @@ export default function Recommendations() {
         level: selectedLevel || null,
       };
 
-      const response = await api.post('/recommendations/generate', payload);
+      let algoParam = 'hybrid';
+      if (selectedAlgorithm === 'Collaborative Filtering') {
+        algoParam = 'collaborative';
+      } else if (selectedAlgorithm === 'Content-Based') {
+        algoParam = 'content';
+      }
+
+      const response = await api.post(`/recommendations/generate?algorithm=${algoParam}`, payload);
       setRecommendations(response.data);
       if (isRegenerate) {
         toast.success('Recommendations regenerated successfully!');
