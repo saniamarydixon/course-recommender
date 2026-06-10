@@ -39,3 +39,16 @@ class Course(Base):
     roadmap_steps: Mapped[list["RoadmapStep"]] = relationship(
         "RoadmapStep", back_populates="course", cascade="all, delete-orphan"
     )
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review", back_populates="course", cascade="all, delete-orphan"
+    )
+
+    @property
+    def average_rating(self) -> float:
+        if not self.reviews:
+            return 0.0
+        return round(sum(r.rating for r in self.reviews) / len(self.reviews), 1)
+
+    @property
+    def total_reviews(self) -> int:
+        return len(self.reviews)

@@ -15,12 +15,17 @@ import {
   Stack,
   LinearProgress,
   Slider,
+  Avatar,
+  TextField,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TranslateIcon from '@mui/icons-material/Translate';
 import SchoolIcon from '@mui/icons-material/School';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import StarIcon from '@mui/icons-material/Star';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
@@ -33,6 +38,33 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 
+  // Reviews and current user states
+  const [reviews, setReviews] = useState([]);
+  const [userReview, setUserReview] = useState(null);
+  const [ratingInput, setRatingInput] = useState(5);
+  const [commentInput, setCommentInput] = useState('');
+  const [editingReviewId, setEditingReviewId] = useState(null);
+  const [editRatingInput, setEditRatingInput] = useState(5);
+  const [editCommentInput, setEditCommentInput] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (reviews.length > 0 && currentUser) {
+      const myReview = reviews.find(r => r.user_id === currentUser.id);
+      setUserReview(myReview || null);
+    } else {
+      setUserReview(null);
+    }
+  }, [reviews, currentUser]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -43,6 +75,10 @@ export default function CourseDetail() {
         const statusRes = await api.get(`/courses/${id}/enrollment-status`);
         setEnrolled(statusRes.data.is_enrolled);
         setProgress(statusRes.data.progress || 0);
+
+        // Fetch reviews
+        const reviewsRes = await api.get(`/courses/${id}/reviews`);
+        setReviews(reviewsRes.data);
       } catch (err) {
         console.error("Error loading course details:", err);
         toast.error("Failed to load course details");
@@ -54,6 +90,85 @@ export default function CourseDetail() {
 
     fetchData();
   }, [id, navigate]);
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (ratingInput < 1 || ratingInput > 5) {
+      toast.error("Rating must be between 1 and 5 stars");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      await api.post(`/courses/${id}/reviews`, {
+        rating: ratingInput,
+        comment: commentInput
+      });
+      toast.success("Review submitted successfully!");
+      setCommentInput('');
+      setRatingInput(5);
+      
+      // Refresh reviews and course data (to update avg rating)
+      const reviewsRes = await api.get(`/courses/${id}/reviews`);
+      setReviews(reviewsRes.data);
+      const courseRes = await api.get(`/courses/${id}`);
+      setCourse(courseRes.data);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleStartEdit = (review) => {
+    setEditingReviewId(review.id);
+    setEditRatingInput(review.rating);
+    setEditCommentInput(review.comment || '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReviewId(null);
+  };
+
+  const handleUpdateReview = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/reviews/${editingReviewId}`, {
+        rating: editRatingInput,
+        comment: editCommentInput
+      });
+      toast.success("Review updated successfully!");
+      setEditingReviewId(null);
+      
+      // Refresh reviews and course data
+      const reviewsRes = await api.get(`/courses/${id}/reviews`);
+      setReviews(reviewsRes.data);
+      const courseRes = await api.get(`/courses/${id}`);
+      setCourse(courseRes.data);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Failed to update review");
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm("Are you sure you want to delete your review?")) {
+      return;
+    }
+    try {
+      await api.delete(`/reviews/${reviewId}`);
+      toast.success("Review deleted successfully!");
+      
+      // Refresh reviews and course data
+      const reviewsRes = await api.get(`/courses/${id}/reviews`);
+      setReviews(reviewsRes.data);
+      const courseRes = await api.get(`/courses/${id}`);
+      setCourse(courseRes.data);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Failed to delete review");
+    }
+  };
 
   const handleEnroll = async () => {
     setEnrolling(true);
@@ -215,7 +330,7 @@ export default function CourseDetail() {
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
                 <Rating
-                  value={course.rating || 4.5}
+                  value={course.average_rating || 0}
                   precision={0.1}
                   readOnly
                   sx={{ color: '#f59e0b' }}
@@ -228,8 +343,7 @@ export default function CourseDetail() {
                     fontFamily: "'Outfit', sans-serif",
                   }}
                 >
-                  {(course.rating || 4.5).toFixed(1)} (
-                  {course.enrollment_count || 120} ratings)
+                  {course.average_rating ? course.average_rating.toFixed(1) : '0.0'} ({course.total_reviews || 0} reviews)
                 </Typography>
                 <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
                 <Typography
@@ -270,6 +384,275 @@ export default function CourseDetail() {
                   'No detailed description is currently available for this course. In this course, you will learn standard modern techniques, tools, and paradigms through structured modules and hands-on exercises.'}
               </Typography>
             </CardContent>
+          </Card>
+
+          {/* Reviews & Ratings Card */}
+          <Card
+            sx={{
+              borderRadius: '16px',
+              border: '1px solid #f1f5f9',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+              p: { xs: 3, sm: 4 },
+              mb: 4,
+            }}
+          >
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 800,
+                color: '#1e293b',
+                fontFamily: "'Outfit', sans-serif",
+                mb: 3,
+              }}
+            >
+              Course Reviews ({reviews.length})
+            </Typography>
+
+            {/* Write a Review Form - only show if enrolled and user hasn't reviewed yet */}
+            {enrolled && !userReview && (
+              <Box sx={{ mb: 4, p: 3, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight: 700,
+                    color: '#1e293b',
+                    fontFamily: "'Outfit', sans-serif",
+                    mb: 2,
+                  }}
+                >
+                  Write a Review
+                </Typography>
+                <form onSubmit={handleSubmitReview}>
+                  <Stack spacing={2.5}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569', fontFamily: "'Outfit', sans-serif" }}>
+                        Your Rating:
+                      </Typography>
+                      <Rating
+                        value={ratingInput}
+                        onChange={(e, val) => setRatingInput(val || 5)}
+                        sx={{ color: '#f59e0b' }}
+                      />
+                    </Box>
+                    <TextField
+                      label="Your Comment"
+                      multiline
+                      rows={3}
+                      fullWidth
+                      value={commentInput}
+                      onChange={(e) => setCommentInput(e.target.value)}
+                      placeholder="Share your thoughts about the course contents, teaching style, and pacing..."
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                    />
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={submittingReview}
+                      sx={{
+                        alignSelf: 'flex-start',
+                        py: 1,
+                        px: 3,
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif",
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      }}
+                    >
+                      {submittingReview ? 'Submitting...' : 'Submit Review'}
+                    </Button>
+                  </Stack>
+                </form>
+              </Box>
+            )}
+
+            {/* Reviews List */}
+            {reviews.length === 0 ? (
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#64748b',
+                  fontFamily: "'Outfit', sans-serif",
+                  fontStyle: 'italic',
+                  py: 2,
+                }}
+              >
+                No reviews yet. Be the first to share your thoughts!
+              </Typography>
+            ) : (
+              <Stack spacing={3}>
+                {reviews.map((rev) => {
+                  const isOwnReview = currentUser && rev.user_id === currentUser.id;
+                  const isEditing = editingReviewId === rev.id;
+                  const reviewUser = rev.user || {};
+                  const reviewDisplayName = reviewUser.full_name || reviewUser.username || "Anonymous";
+                  const reviewDisplayLetter = reviewDisplayName.charAt(0).toUpperCase();
+
+                  return (
+                    <Box key={rev.id}>
+                      <Divider sx={{ mb: 3 }} />
+                      {isEditing ? (
+                        <Box sx={{ p: 2.5, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px solid #667eea' }}>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: 700, fontFamily: "'Outfit', sans-serif", mb: 2 }}
+                          >
+                            Edit Your Review
+                          </Typography>
+                          <form onSubmit={handleUpdateReview}>
+                            <Stack spacing={2}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569', fontFamily: "'Outfit', sans-serif" }}>
+                                  Rating:
+                                </Typography>
+                                <Rating
+                                  value={editRatingInput}
+                                  onChange={(e, val) => setEditRatingInput(val || 5)}
+                                  sx={{ color: '#f59e0b' }}
+                                />
+                              </Box>
+                              <TextField
+                                label="Comment"
+                                multiline
+                                rows={3}
+                                fullWidth
+                                value={editCommentInput}
+                                onChange={(e) => setEditCommentInput(e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                              />
+                              <Stack direction="row" spacing={1.5}>
+                                <Button
+                                  type="submit"
+                                  variant="contained"
+                                  size="small"
+                                  sx={{
+                                    py: 0.75,
+                                    px: 2.5,
+                                    borderRadius: '8px',
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    fontFamily: "'Outfit', sans-serif",
+                                    bgcolor: '#667eea',
+                                    '&:hover': { bgcolor: '#5a6fd6' },
+                                  }}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={handleCancelEdit}
+                                  sx={{
+                                    py: 0.75,
+                                    px: 2.5,
+                                    borderRadius: '8px',
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    fontFamily: "'Outfit', sans-serif",
+                                    borderColor: '#cbd5e1',
+                                    color: '#475569',
+                                    '&:hover': { borderColor: '#94a3b8' },
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </form>
+                        </Box>
+                      ) : (
+                        <Grid container spacing={2}>
+                          {/* Avatar Column */}
+                          <Grid item xs={2} sm={1} sx={{ textAlign: 'center' }}>
+                            <Avatar
+                              src={reviewUser.avatar_url || undefined}
+                              onClick={() => reviewUser.username && navigate(`/users/${reviewUser.username}`)}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                bgcolor: '#667eea',
+                                mx: 'auto',
+                                cursor: reviewUser.username ? 'pointer' : 'default',
+                                '&:hover': { opacity: reviewUser.username ? 0.85 : 1 },
+                              }}
+                            >
+                              {reviewDisplayLetter}
+                            </Avatar>
+                          </Grid>
+
+                          {/* Content Column */}
+                          <Grid item xs={10} sm={11}>
+                            <Stack spacing={0.5}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <Box>
+                                  <Typography
+                                    variant="subtitle2"
+                                    onClick={() => reviewUser.username && navigate(`/users/${reviewUser.username}`)}
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: '#1e293b',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      cursor: reviewUser.username ? 'pointer' : 'default',
+                                      '&:hover': { color: reviewUser.username ? '#667eea' : 'inherit' },
+                                    }}
+                                  >
+                                    {reviewDisplayName}
+                                  </Typography>
+                                  <Rating
+                                    value={rev.rating}
+                                    readOnly
+                                    size="small"
+                                    sx={{ color: '#f59e0b', mt: 0.25 }}
+                                  />
+                                </Box>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ color: '#94a3b8', fontFamily: "'Outfit', sans-serif" }}
+                                  >
+                                    {new Date(rev.created_at).toLocaleDateString()}
+                                  </Typography>
+                                  {isOwnReview && (
+                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleStartEdit(rev)}
+                                        sx={{ color: '#64748b', '&:hover': { color: '#667eea' } }}
+                                      >
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteReview(rev.id)}
+                                        sx={{ color: '#64748b', '&:hover': { color: '#ef4444' } }}
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </Box>
+                                  )}
+                                </Stack>
+                              </Box>
+
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: '#475569',
+                                  fontFamily: "'Outfit', sans-serif",
+                                  lineHeight: 1.6,
+                                  mt: 1,
+                                }}
+                              >
+                                {rev.comment || 'No comment provided.'}
+                              </Typography>
+                            </Stack>
+                          </Grid>
+                        </Grid>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
           </Card>
         </Grid>
 

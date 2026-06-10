@@ -53,6 +53,20 @@ class InteractionService:
         self.db.commit()
         self.db.refresh(interaction)
         self.db.refresh(course)
+
+        # Create enrollment notification
+        from app.services.notification_service import NotificationService
+        try:
+            NotificationService(self.db).create_notification(
+                user_id=user.id,
+                type="enrollment",
+                title="Enrolled in Course! 📚",
+                message=f"You successfully enrolled in '{course.title}'. Happy learning!",
+                link=f"/courses/{course.id}"
+            )
+        except Exception as e:
+            print("Failed to trigger enrollment notification:", e)
+
         return interaction
 
     def unenroll_user_from_course(self, user_id: int, course_id: int) -> bool:
@@ -94,11 +108,29 @@ class InteractionService:
         if not interaction:
             return None
 
+        was_completed = (interaction.interaction_type == "completion")
         interaction.progress = min(max(progress, 0), 100)
+        
         if interaction.progress >= 100:
             interaction.interaction_type = "completion"
+            # Trigger notification if not already completed
+            if not was_completed:
+                from app.services.notification_service import NotificationService
+                course = self.db.query(Course).filter(Course.id == course_id).first()
+                course_title = course.title if course else "Course"
+                try:
+                    NotificationService(self.db).create_notification(
+                        user_id=user_id,
+                        type="enrollment",
+                        title="Course Completed! 🎉",
+                        message=f"Congratulations! You completed 100% of '{course_title}'!",
+                        link=f"/courses/{course_id}"
+                    )
+                except Exception as e:
+                    print("Failed to trigger completion notification:", e)
         else:
             interaction.interaction_type = "enrollment"
+            
         interaction.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(interaction)
@@ -114,6 +146,7 @@ class InteractionService:
             )
             .first()
         )
+        was_completed = False
         if not interaction:
             # If not enrolled, we enroll them first
             course = self.db.query(Course).filter(Course.id == course_id).first()
@@ -132,12 +165,30 @@ class InteractionService:
             course.enrollment_count += 1
             self.db.add(course)
         else:
+            was_completed = (interaction.interaction_type == "completion")
             interaction.progress = 100
             interaction.interaction_type = "completion"
             
         interaction.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(interaction)
+
+        # Trigger notification if not already completed
+        if not was_completed:
+            from app.services.notification_service import NotificationService
+            course = self.db.query(Course).filter(Course.id == course_id).first()
+            course_title = course.title if course else "Course"
+            try:
+                NotificationService(self.db).create_notification(
+                    user_id=user_id,
+                    type="enrollment",
+                    title="Course Completed! 🎉",
+                    message=f"Congratulations! You completed 100% of '{course_title}'!",
+                    link=f"/courses/{course_id}"
+                )
+            except Exception as e:
+                print("Failed to trigger completion notification:", e)
+
         return interaction
 
     def get_user_wishlist(self, user_id: int) -> list[Course]:

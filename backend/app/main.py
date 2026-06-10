@@ -36,6 +36,11 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+from fastapi.staticfiles import StaticFiles
+import os
+os.makedirs("static/avatars", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/")
 def root():

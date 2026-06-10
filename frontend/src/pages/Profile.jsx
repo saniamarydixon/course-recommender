@@ -17,6 +17,10 @@ import {
   List,
   ListItem,
   ListItemText,
+  Chip,
+  IconButton,
+  Tooltip,
+  Link,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import SchoolIcon from '@mui/icons-material/School';
@@ -24,6 +28,17 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import StarRateIcon from '@mui/icons-material/StarRate';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import LinkedInIcon from '@mui/icons-material/LinkedIn';
+import TwitterIcon from '@mui/icons-material/Twitter';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PublicIcon from '@mui/icons-material/Public';
+import LockIcon from '@mui/icons-material/Lock';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import LaunchIcon from '@mui/icons-material/Launch';
+import Rating from '@mui/material/Rating';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
@@ -49,12 +64,35 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
+  // Edit Mode state
+  const [editMode, setEditMode] = useState(false);
+  
+  // New profile fields states
+  const [location, setLocation] = useState('');
+  const [skills, setSkills] = useState('');
+  const [socialGithub, setSocialGithub] = useState('');
+  const [socialLinkedin, setSocialLinkedin] = useState('');
+  const [socialTwitter, setSocialTwitter] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+
+  // Reviews and uploading states
+  const [myReviews, setMyReviews] = useState([]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrlInput, setAvatarUrlInput] = useState('');
+
   const fetchProfileData = async () => {
     try {
       const userRes = await api.get('/users/me');
       setUser(userRes.data);
       setFullName(userRes.data.full_name || '');
       setBio(userRes.data.bio || '');
+      setLocation(userRes.data.location || '');
+      setSkills(userRes.data.skills || '');
+      setSocialGithub(userRes.data.social_links?.github || '');
+      setSocialLinkedin(userRes.data.social_links?.linkedin || '');
+      setSocialTwitter(userRes.data.social_links?.twitter || '');
+      setIsPublic(userRes.data.is_public || false);
+      setAvatarUrlInput(userRes.data.avatar_url || '');
       
       const interestList = userRes.data.interests
         ? userRes.data.interests.split(',').map(s => s.trim()).filter(Boolean)
@@ -65,6 +103,9 @@ export default function Profile() {
 
       const enrolledRes = await api.get('/users/me/enrolled-courses');
       setEnrolledCourses(enrolledRes.data);
+
+      const reviewsRes = await api.get('/users/me/reviews');
+      setMyReviews(reviewsRes.data);
     } catch (err) {
       console.error("Failed to fetch profile data:", err);
       toast.error("Error loading profile details");
@@ -91,18 +132,102 @@ export default function Profile() {
         full_name: fullName,
         bio: bio,
         interests: selectedInterests.join(','),
+        location: location,
+        skills: skills,
+        social_links: {
+          github: socialGithub,
+          linkedin: socialLinkedin,
+          twitter: socialTwitter,
+        },
+        is_public: isPublic,
       };
 
       const res = await api.put('/users/me', payload);
       setUser(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
       toast.success('Profile updated successfully!');
+      setEditMode(false);
       fetchProfileData(); // Reload
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.detail || 'Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingAvatar(true);
+    try {
+      const res = await api.post('/users/me/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      toast.success('Avatar uploaded successfully!');
+      setUser(prev => ({ ...prev, avatar_url: res.data.avatar_url }));
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        parsed.avatar_url = res.data.avatar_url;
+        localStorage.setItem('user', JSON.stringify(parsed));
+      }
+      // Trigger header refresh
+      window.dispatchEvent(new Event('userUpdated'));
+      fetchProfileData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to upload avatar image');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleAvatarUrlUpdate = async () => {
+    if (!avatarUrlInput) {
+      toast.error("Please enter a valid URL");
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar_url', avatarUrlInput);
+      const res = await api.post('/users/me/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      toast.success('Avatar URL updated successfully!');
+      setUser(prev => ({ ...prev, avatar_url: res.data.avatar_url }));
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        parsed.avatar_url = res.data.avatar_url;
+        localStorage.setItem('user', JSON.stringify(parsed));
+      }
+      window.dispatchEvent(new Event('userUpdated'));
+      fetchProfileData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update avatar URL');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleDeleteMyReview = async (reviewId) => {
+    if (!window.confirm("Are you sure you want to delete this review?")) return;
+    try {
+      await api.delete(`/reviews/${reviewId}`);
+      toast.success("Review deleted successfully!");
+      fetchProfileData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete review");
     }
   };
 
@@ -131,6 +256,42 @@ export default function Profile() {
     month: 'long',
   });
 
+  const skillsList = user.skills
+    ? user.skills.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  // Compile Activities
+  const activities = [];
+  enrolledCourses.forEach(item => {
+    if (item.course) {
+      activities.push({
+        type: 'enrollment',
+        title: `Enrolled in ${item.course.title}`,
+        date: new Date(item.last_accessed || item.course.created_at || Date.now()),
+        link: `/courses/${item.course.id}`
+      });
+      if (item.progress >= 100) {
+        activities.push({
+          type: 'completion',
+          title: `Completed ${item.course.title}! 🎉`,
+          date: new Date(item.last_accessed || Date.now()),
+          link: `/courses/${item.course.id}`
+        });
+      }
+    }
+  });
+  myReviews.forEach(rev => {
+    activities.push({
+      type: 'review',
+      title: `Reviewed course (Rating: ${rev.rating}/5)`,
+      subtitle: rev.comment,
+      date: new Date(rev.created_at),
+      link: `/courses/${rev.course_id}`
+    });
+  });
+  activities.sort((a, b) => b.date - a.date);
+  const recentActivities = activities.slice(0, 5);
+
   return (
     <Box sx={{ flexGrow: 1, py: 2 }}>
       <Grid container spacing={4}>
@@ -148,6 +309,7 @@ export default function Profile() {
               }}
             >
               <Avatar
+                src={user.avatar_url || undefined}
                 sx={{
                   width: 90,
                   height: 90,
@@ -193,7 +355,7 @@ export default function Profile() {
                   color: '#475569',
                   fontWeight: 500,
                   fontFamily: "'Outfit', sans-serif",
-                  mb: 2,
+                  mb: 1,
                 }}
               >
                 {user.email}
@@ -206,11 +368,75 @@ export default function Profile() {
                   fontWeight: 500,
                   fontFamily: "'Outfit', sans-serif",
                   display: 'block',
-                  mb: 3,
+                  mb: 2,
                 }}
               >
                 Joined {joinedDate}
               </Typography>
+
+              <Stack direction="row" justifyContent="center" spacing={1} sx={{ mb: 3 }}>
+                <Chip
+                  icon={user.is_public ? <PublicIcon /> : <LockIcon />}
+                  label={user.is_public ? 'Public Profile' : 'Private Profile'}
+                  size="small"
+                  sx={{
+                    bgcolor: user.is_public ? 'rgba(34, 197, 94, 0.1)' : 'rgba(148, 163, 184, 0.1)',
+                    color: user.is_public ? '#22c55e' : '#64748b',
+                    fontWeight: 700,
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                />
+                {user.is_public && (
+                  <Chip
+                    icon={<LaunchIcon />}
+                    label="View Public Link"
+                    size="small"
+                    onClick={() => navigate(`/users/${user.username}`)}
+                    sx={{
+                      cursor: 'pointer',
+                      bgcolor: 'rgba(102, 126, 234, 0.1)',
+                      color: '#667eea',
+                      fontWeight: 700,
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  />
+                )}
+              </Stack>
+
+              {!editMode ? (
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={() => setEditMode(true)}
+                  startIcon={<EditIcon />}
+                  sx={{
+                    borderRadius: '8px',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontFamily: "'Outfit', sans-serif",
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    mb: 1.5,
+                  }}
+                >
+                  Edit Profile
+                </Button>
+              ) : (
+                <Stack spacing={1} sx={{ mb: 1.5 }}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={() => setEditMode(false)}
+                    sx={{
+                      borderRadius: '8px',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </Stack>
+              )}
 
               <Button
                 fullWidth
@@ -318,7 +544,7 @@ export default function Profile() {
                     </Typography>
                   </Stack>
                   <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e293b', fontFamily: "'Outfit', sans-serif" }}>
-                    0
+                    {myReviews.length}
                   </Typography>
                 </Box>
               </Stack>
@@ -329,7 +555,397 @@ export default function Profile() {
         {/* Right Side - Form and Courses */}
         <Grid item xs={12} md={8}>
           <Stack spacing={4}>
-            {/* Edit Profile Form */}
+            {/* profile details Card */}
+            <Card
+              sx={{
+                borderRadius: '16px',
+                border: '1px solid #f1f5f9',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                p: { xs: 3, sm: 4 },
+              }}
+            >
+              {editMode ? (
+                // EDIT MODE
+                <Box>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 800,
+                      color: '#1e293b',
+                      fontFamily: "'Outfit', sans-serif",
+                      mb: 3,
+                    }}
+                  >
+                    Edit Profile Details
+                  </Typography>
+
+                  {/* Avatar upload subform */}
+                  <Box sx={{ mb: 4, p: 2, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: "'Outfit', sans-serif", mb: 1.5 }}>
+                      Profile Image Settings
+                    </Typography>
+                    <Grid container spacing={2} alignItems="center">
+                      <Grid item xs={12} sm={4}>
+                        <Button
+                          variant="contained"
+                          component="label"
+                          disabled={uploadingAvatar}
+                          startIcon={<PhotoCameraIcon />}
+                          sx={{
+                            borderRadius: '8px',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            fontFamily: "'Outfit', sans-serif",
+                            bgcolor: '#667eea',
+                          }}
+                        >
+                          {uploadingAvatar ? 'Uploading...' : 'Upload Image'}
+                          <input
+                            type="file"
+                            hidden
+                            accept="image/*"
+                            onChange={handleAvatarUpload}
+                          />
+                        </Button>
+                      </Grid>
+                      <Grid item xs={12} sm={8}>
+                        <Stack direction="row" spacing={1}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            label="Or paste Avatar URL"
+                            value={avatarUrlInput}
+                            onChange={(e) => setAvatarUrlInput(e.target.value)}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                          <Button
+                            variant="outlined"
+                            disabled={uploadingAvatar}
+                            onClick={handleAvatarUrlUpdate}
+                            sx={{ borderRadius: '8px', textTransform: 'none', fontFamily: "'Outfit', sans-serif" }}
+                          >
+                            Update
+                          </Button>
+                        </Stack>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  <form onSubmit={handleSave}>
+                    <Stack spacing={3}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            label="Username"
+                            fullWidth
+                            disabled
+                            value={user.username}
+                            helperText="Username cannot be changed"
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            label="Email Address"
+                            fullWidth
+                            disabled
+                            value={user.email}
+                            helperText="Email address cannot be changed"
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                        </Grid>
+                      </Grid>
+
+                      <TextField
+                        label="Full Name"
+                        fullWidth
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      />
+
+                      <TextField
+                        label="Location"
+                        fullWidth
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="e.g. New York, USA"
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      />
+
+                      <TextField
+                        label="Bio"
+                        fullWidth
+                        multiline
+                        rows={3}
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        placeholder="Tell us about yourself, your learning goals, and experience..."
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      />
+
+                      <TextField
+                        label="Skills / Expertise"
+                        fullWidth
+                        value={skills}
+                        onChange={(e) => setSkills(e.target.value)}
+                        placeholder="e.g. React, Python, Data Analysis (comma-separated)"
+                        helperText="Separate skills with commas"
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                      />
+
+                      <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '12px' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: "'Outfit', sans-serif", mb: 1.5 }}>
+                          Social Media Profiles
+                        </Typography>
+                        <Stack spacing={2}>
+                          <TextField
+                            size="small"
+                            label="GitHub Profile URL"
+                            value={socialGithub}
+                            onChange={(e) => setSocialGithub(e.target.value)}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                          <TextField
+                            size="small"
+                            label="LinkedIn Profile URL"
+                            value={socialLinkedin}
+                            onChange={(e) => setSocialLinkedin(e.target.value)}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                          <TextField
+                            size="small"
+                            label="Twitter / X Profile URL"
+                            value={socialTwitter}
+                            onChange={(e) => setSocialTwitter(e.target.value)}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                          />
+                        </Stack>
+                      </Box>
+
+                      <Box>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#475569',
+                            fontFamily: "'Outfit', sans-serif",
+                            mb: 1.5,
+                          }}
+                        >
+                          Interests Checkboxes
+                        </Typography>
+                        <Grid container spacing={1}>
+                          {CATEGORIES.map((category) => (
+                            <Grid item xs={6} sm={4} key={category}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={selectedInterests.includes(category)}
+                                    onChange={() => handleInterestChange(category)}
+                                    sx={{
+                                      color: '#cbd5e1',
+                                      '&.Mui-checked': {
+                                        color: '#667eea',
+                                      },
+                                    }}
+                                  />
+                                }
+                                label={
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      color: '#475569',
+                                      fontWeight: 500,
+                                      fontFamily: "'Outfit', sans-serif",
+                                    }}
+                                  >
+                                    {category}
+                                  </Typography>
+                                }
+                              />
+                            </Grid>
+                          ))}
+                        </Grid>
+                      </Box>
+
+                      <Divider />
+
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={isPublic}
+                            onChange={(e) => setIsPublic(e.target.checked)}
+                            sx={{
+                              color: '#cbd5e1',
+                              '&.Mui-checked': {
+                                color: '#667eea',
+                              },
+                            }}
+                          />
+                        }
+                        label={
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: '#1e293b',
+                              fontWeight: 700,
+                              fontFamily: "'Outfit', sans-serif",
+                            }}
+                          >
+                            Make Profile Public (other users can view your profile details and courses)
+                          </Typography>
+                        }
+                      />
+
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={saving}
+                        sx={{
+                          py: 1.25,
+                          alignSelf: 'flex-start',
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          fontFamily: "'Outfit', sans-serif",
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
+                          '&:hover': {
+                            background: 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
+                          },
+                        }}
+                      >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                    </Stack>
+                  </form>
+                </Box>
+              ) : (
+                // VIEW MODE
+                <Box>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 800,
+                      color: '#1e293b',
+                      fontFamily: "'Outfit', sans-serif",
+                      mb: 2,
+                    }}
+                  >
+                    Personal Biography
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      color: '#475569',
+                      fontFamily: "'Outfit', sans-serif",
+                      lineHeight: 1.7,
+                      mb: 3,
+                    }}
+                  >
+                    {user.bio || "No biography provided yet. Edit your profile to tell us about your goals."}
+                  </Typography>
+
+                  {user.location && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#475569', mb: 3 }}>
+                      <LocationOnIcon sx={{ color: '#ef4444' }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
+                        Location: {user.location}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {selectedInterests.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 700, color: '#1e293b', fontFamily: "'Outfit', sans-serif", mb: 1 }}
+                      >
+                        Interests
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {selectedInterests.map((interest) => (
+                          <Chip
+                            key={interest}
+                            label={interest}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(118, 75, 162, 0.08)',
+                              color: '#764ba2',
+                              fontWeight: 600,
+                              fontFamily: "'Outfit', sans-serif",
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {skillsList.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 700, color: '#1e293b', fontFamily: "'Outfit', sans-serif", mb: 1 }}
+                      >
+                        Skills & Expertise
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {skillsList.map((skill) => (
+                          <Chip
+                            key={skill}
+                            label={skill}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(102, 126, 234, 0.08)',
+                              color: '#667eea',
+                              fontWeight: 600,
+                              fontFamily: "'Outfit', sans-serif",
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {user.social_links && Object.values(user.social_links).some(Boolean) && (
+                    <Box>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 700, color: '#1e293b', fontFamily: "'Outfit', sans-serif", mb: 1.5 }}
+                      >
+                        Social Profiles
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        {user.social_links.github && (
+                          <Tooltip title="GitHub">
+                            <IconButton component={Link} href={user.social_links.github} target="_blank" rel="noopener">
+                              <GitHubIcon sx={{ color: '#1e293b' }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {user.social_links.linkedin && (
+                          <Tooltip title="LinkedIn">
+                            <IconButton component={Link} href={user.social_links.linkedin} target="_blank" rel="noopener">
+                              <LinkedInIcon sx={{ color: '#0a66c2' }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {user.social_links.twitter && (
+                          <Tooltip title="Twitter">
+                            <IconButton component={Link} href={user.social_links.twitter} target="_blank" rel="noopener">
+                              <TwitterIcon sx={{ color: '#1d9bf0' }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Card>
+
+            {/* My Reviews Card */}
             <Card
               sx={{
                 borderRadius: '16px',
@@ -347,121 +963,116 @@ export default function Profile() {
                   mb: 3,
                 }}
               >
-                Edit Profile
+                My Reviews ({myReviews.length})
               </Typography>
-
-              <form onSubmit={handleSave}>
-                <Stack spacing={3}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Username"
-                        fullWidth
-                        disabled
-                        value={user.username}
-                        helperText="Username cannot be changed"
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Email Address"
-                        fullWidth
-                        disabled
-                        value={user.email}
-                        helperText="Email address cannot be changed"
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <TextField
-                    label="Full Name"
-                    fullWidth
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                  />
-
-                  <TextField
-                    label="Bio"
-                    fullWidth
-                    multiline
-                    rows={4}
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Tell us about yourself, your learning goals, and experience..."
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                  />
-
-                  <Box>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: 700,
-                        color: '#475569',
-                        fontFamily: "'Outfit', sans-serif",
-                        mb: 1.5,
-                      }}
-                    >
-                      Interests Checkboxes
-                    </Typography>
-                    <Grid container spacing={1}>
-                      {CATEGORIES.map((category) => (
-                        <Grid item xs={6} sm={4} key={category}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={selectedInterests.includes(category)}
-                                onChange={() => handleInterestChange(category)}
-                                sx={{
-                                  color: '#cbd5e1',
-                                  '&.Mui-checked': {
-                                    color: '#667eea',
-                                  },
-                                }}
-                              />
-                            }
-                            label={
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  color: '#475569',
-                                  fontWeight: 500,
-                                  fontFamily: "'Outfit', sans-serif",
-                                }}
-                              >
-                                {category}
+              {myReviews.length === 0 ? (
+                <Typography variant="body2" sx={{ color: '#64748b', fontFamily: "'Outfit', sans-serif", fontStyle: 'italic' }}>
+                  You haven't reviewed any courses yet.
+                </Typography>
+              ) : (
+                <List sx={{ p: 0 }}>
+                  {myReviews.map((rev, idx) => (
+                    <Box key={rev.id}>
+                      {idx > 0 && <Divider sx={{ my: 2 }} />}
+                      <ListItem
+                        disablePadding
+                        alignItems="flex-start"
+                        secondaryAction={
+                          <IconButton edge="end" color="error" onClick={() => handleDeleteMyReview(rev.id)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemText
+                          primary={
+                            <Typography
+                              variant="subtitle1"
+                              onClick={() => navigate(`/courses/${rev.course_id}`)}
+                              sx={{
+                                fontWeight: 800,
+                                color: '#1e293b',
+                                fontFamily: "'Outfit', sans-serif",
+                                cursor: 'pointer',
+                                '&:hover': { color: '#667eea' }
+                              }}
+                            >
+                              {rev.course?.title || `Course ID: ${rev.course_id}`}
+                            </Typography>
+                          }
+                          secondary={
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                              <Rating value={rev.rating} readOnly size="small" sx={{ color: '#f59e0b' }} />
+                              <Typography variant="body2" sx={{ color: '#475569', fontFamily: "'Outfit', sans-serif", mt: 0.5 }}>
+                                {rev.comment || 'No comments.'}
                               </Typography>
-                            }
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
+                              <Typography variant="caption" sx={{ color: '#94a3b8', fontFamily: "'Outfit', sans-serif" }}>
+                                Reviewed on {new Date(rev.created_at).toLocaleDateString()}
+                              </Typography>
+                            </Stack>
+                          }
+                        />
+                      </ListItem>
+                    </Box>
+                  ))}
+                </List>
+              )}
+            </Card>
 
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving}
-                    sx={{
-                      py: 1.25,
-                      alignSelf: 'flex-start',
-                      borderRadius: '8px',
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      fontFamily: "'Outfit', sans-serif",
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
-                      },
-                    }}
-                  >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
+            {/* Recent Activity Card */}
+            <Card
+              sx={{
+                borderRadius: '16px',
+                border: '1px solid #f1f5f9',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                p: { xs: 3, sm: 4 },
+              }}
+            >
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 800,
+                  color: '#1e293b',
+                  fontFamily: "'Outfit', sans-serif",
+                  mb: 3,
+                }}
+              >
+                Recent Activity
+              </Typography>
+              {recentActivities.length === 0 ? (
+                <Typography variant="body2" sx={{ color: '#64748b', fontFamily: "'Outfit', sans-serif", fontStyle: 'italic' }}>
+                  No recent activities logged.
+                </Typography>
+              ) : (
+                <Stack spacing={2}>
+                  {recentActivities.map((act, idx) => (
+                    <Box key={idx} sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography
+                          variant="body2"
+                          onClick={() => navigate(act.link)}
+                          sx={{
+                            fontWeight: 700,
+                            color: '#1e293b',
+                            fontFamily: "'Outfit', sans-serif",
+                            cursor: 'pointer',
+                            '&:hover': { color: '#667eea' }
+                          }}
+                        >
+                          {act.title}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#94a3b8', fontFamily: "'Outfit', sans-serif" }}>
+                          {act.date.toLocaleDateString()}
+                        </Typography>
+                      </Stack>
+                      {act.subtitle && (
+                        <Typography variant="body2" sx={{ color: '#64748b', fontFamily: "'Outfit', sans-serif", mt: 0.5, fontStyle: 'italic' }}>
+                          "{act.subtitle}"
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
                 </Stack>
-              </form>
+              )}
             </Card>
 
             {/* My Enrolled Courses Section */}
@@ -626,3 +1237,4 @@ export default function Profile() {
     </Box>
   );
 }
+

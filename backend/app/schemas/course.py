@@ -45,3 +45,5 @@ class CourseResponse(CourseBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    average_rating: float = 0.0
+    total_reviews: int = 0
