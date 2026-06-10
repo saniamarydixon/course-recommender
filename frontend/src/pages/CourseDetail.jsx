@@ -13,6 +13,8 @@ import {
   CircularProgress,
   Divider,
   Stack,
+  LinearProgress,
+  Slider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -27,6 +29,7 @@ export default function CourseDetail() {
   const navigate = useNavigate();
   const [course, setCourse] = useState(null);
   const [enrolled, setEnrolled] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 
@@ -36,12 +39,10 @@ export default function CourseDetail() {
         const courseRes = await api.get(`/courses/${id}`);
         setCourse(courseRes.data);
 
-        // Check if enrolled
-        const enrollRes = await api.get('/users/me/enrolled-courses');
-        const isEnrolled = enrollRes.data.some(
-          (item) => item.course.id === Number(id)
-        );
-        setEnrolled(isEnrolled);
+        // Fetch enrollment status and progress
+        const statusRes = await api.get(`/courses/${id}/enrollment-status`);
+        setEnrolled(statusRes.data.is_enrolled);
+        setProgress(statusRes.data.progress || 0);
       } catch (err) {
         console.error("Error loading course details:", err);
         toast.error("Failed to load course details");
@@ -59,12 +60,47 @@ export default function CourseDetail() {
     try {
       await api.post(`/courses/${id}/enroll`);
       setEnrolled(true);
+      setProgress(0);
       toast.success('Successfully enrolled in the course!');
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.detail || 'Failed to enroll in course');
     } finally {
       setEnrolling(false);
+    }
+  };
+
+  const handleUpdateProgress = async (val) => {
+    try {
+      const res = await api.put(`/courses/${id}/progress`, { progress: val });
+      setProgress(res.data.progress);
+      if (val >= 100) {
+        toast.success('Congratulations! You completed the course! 🎉');
+      } else {
+        toast.success(`Progress updated to ${val}%`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update progress');
+    }
+  };
+
+  const handleSliderChange = (val) => {
+    setProgress(val);
+  };
+
+  const handleUnenroll = async () => {
+    if (!window.confirm('Are you sure you want to unenroll from this course? Your progress will be lost.')) {
+      return;
+    }
+    try {
+      await api.delete(`/courses/${id}/enroll`);
+      setEnrolled(false);
+      setProgress(0);
+      toast.success('Successfully unenrolled from the course.');
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || 'Failed to unenroll');
     }
   };
 
@@ -304,24 +340,169 @@ export default function CourseDetail() {
             </Stack>
 
             {enrolled ? (
-              <Button
-                fullWidth
-                variant="contained"
-                disabled
-                startIcon={<CheckCircleIcon />}
-                sx={{
-                  py: 1.5,
-                  borderRadius: '8px',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '1rem',
-                  fontFamily: "'Outfit', sans-serif",
-                  backgroundColor: '#22c55e !important',
-                  color: '#ffffff !important',
-                }}
-              >
-                Enrolled
-              </Button>
+              <Stack spacing={2.5}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 1,
+                    py: 1,
+                    borderRadius: '8px',
+                    backgroundColor: progress >= 100 ? '#f0fdf4' : '#f0fdfa',
+                    border: progress >= 100 ? '1px solid #bbf7d0' : '1px solid #99f6e4',
+                  }}
+                >
+                  <CheckCircleIcon sx={{ color: progress >= 100 ? '#22c55e' : '#0d9488' }} />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      color: progress >= 100 ? '#166534' : '#115e59',
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >
+                    {progress >= 100 ? 'Course Completed!' : 'Enrolled & Learning'}
+                  </Typography>
+                </Box>
+
+                {/* Progress bar */}
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
+                      Your Progress
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#667eea', fontFamily: "'Outfit', sans-serif" }}>
+                      {progress}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={progress}
+                    sx={{
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: '#e2e8f0',
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 4,
+                        backgroundColor: progress >= 100 ? '#22c55e' : '#667eea',
+                      },
+                    }}
+                  />
+                </Box>
+
+                {/* Progress quick buttons */}
+                <Stack spacing={1}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', fontFamily: "'Outfit', sans-serif", mb: 0.5 }}>
+                    Quick Actions
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={4}>
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleUpdateProgress(25)}
+                        sx={{
+                          fontSize: '0.75rem',
+                          py: 0.75,
+                          fontFamily: "'Outfit', sans-serif",
+                          borderColor: '#cbd5e1',
+                          color: '#475569',
+                          '&:hover': {
+                            borderColor: '#667eea',
+                            color: '#667eea',
+                          }
+                        }}
+                      >
+                        25%
+                      </Button>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleUpdateProgress(50)}
+                        sx={{
+                          fontSize: '0.75rem',
+                          py: 0.75,
+                          fontFamily: "'Outfit', sans-serif",
+                          borderColor: '#cbd5e1',
+                          color: '#475569',
+                          '&:hover': {
+                            borderColor: '#667eea',
+                            color: '#667eea',
+                          }
+                        }}
+                      >
+                        50%
+                      </Button>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant="contained"
+                        onClick={() => handleUpdateProgress(100)}
+                        sx={{
+                          fontSize: '0.75rem',
+                          py: 0.75,
+                          fontFamily: "'Outfit', sans-serif",
+                          background: progress >= 100 ? '#22c55e' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          '&:hover': {
+                            background: progress >= 100 ? '#1ea350' : 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
+                          }
+                        }}
+                      >
+                        100%
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Stack>
+
+                {/* Slider option for granular control */}
+                <Box sx={{ px: 1, pt: 1 }}>
+                  <Slider
+                    value={progress}
+                    onChange={(e, val) => handleSliderChange(val)}
+                    onChangeCommitted={(e, val) => handleUpdateProgress(val)}
+                    valueLabelDisplay="auto"
+                    min={0}
+                    max={100}
+                    sx={{
+                      color: '#667eea',
+                      '& .MuiSlider-thumb': {
+                        '&:hover, &.Mui-focusVisible': {
+                          boxShadow: '0px 0px 0px 8px rgba(102, 126, 234, 0.16)',
+                        },
+                      },
+                    }}
+                  />
+                </Box>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Button
+                  fullWidth
+                  variant="text"
+                  color="error"
+                  onClick={handleUnenroll}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontFamily: "'Outfit', sans-serif",
+                    fontSize: '0.9rem',
+                    '&:hover': {
+                      backgroundColor: '#fef2f2',
+                    },
+                  }}
+                >
+                  Unenroll from Course
+                </Button>
+              </Stack>
             ) : (
               <Button
                 fullWidth

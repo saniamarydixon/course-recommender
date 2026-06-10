@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
+from app.schemas.course import CourseResponse
 from app.schemas.interaction import EnrolledCourseItem
 from app.schemas.user import UserResponse, UserUpdate
 from app.services.interaction_service import InteractionService
@@ -46,6 +47,31 @@ def get_current_user_enrolled_courses(
         )
         for enrollment in enrollments
     ]
+
+
+@router.get("/me/enrollments", response_model=list[EnrolledCourseItem])
+def get_current_user_enrollments(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    enrollments = InteractionService(db).get_user_enrollments(current_user.id)
+    return [
+        EnrolledCourseItem(
+            course=enrollment.course,
+            progress=enrollment.progress or 0,
+            status="completed" if enrollment.progress >= 100 else "in_progress",
+            last_accessed=enrollment.updated_at,
+        )
+        for enrollment in enrollments
+    ]
+
+
+@router.get("/me/wishlist", response_model=list[CourseResponse])
+def get_current_user_wishlist(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return InteractionService(db).get_user_wishlist(current_user.id)
 
 
 @router.get("/", response_model=list[UserResponse])

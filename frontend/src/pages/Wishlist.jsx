@@ -11,123 +11,54 @@ import {
   Chip,
   Rating,
   CircularProgress,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  InputAdornment,
-  Stack,
   Button,
   IconButton,
+  Stack,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import ClearIcon from '@mui/icons-material/Clear';
-import SearchOffIcon from '@mui/icons-material/SearchOff';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
-export default function Courses() {
+export default function Wishlist() {
   const [courses, setCourses] = useState([]);
-  const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Filter States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [category, setCategory] = useState('All');
-  const [level, setLevel] = useState('All');
-  const [sortBy, setSortBy] = useState('Default');
-
   const navigate = useNavigate();
 
+  const fetchWishlist = async () => {
+    try {
+      const res = await api.get('/users/me/wishlist');
+      setCourses(res.data);
+    } catch (err) {
+      console.error('Failed to fetch wishlist courses:', err);
+      toast.error('Failed to load wishlist');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    Promise.all([
-      api.get('/courses/'),
-      api.get('/users/me/wishlist').catch(() => ({ data: [] }))
-    ])
-      .then(([coursesRes, wishlistRes]) => {
-        setCourses(coursesRes.data);
-        setWishlistIds(wishlistRes.data.map(c => c.id));
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch courses/wishlist:", err);
-        setLoading(false);
-      });
+    fetchWishlist();
   }, []);
 
-  const handleWishlistToggle = async (e, courseId) => {
+  const handleRemoveFromWishlist = async (e, courseId) => {
     e.stopPropagation();
     e.preventDefault();
-    const isWishlisted = wishlistIds.includes(courseId);
     try {
-      if (isWishlisted) {
-        await api.delete(`/courses/${courseId}/wishlist`);
-        setWishlistIds(wishlistIds.filter(id => id !== courseId));
-        toast.success('Removed from wishlist');
-      } else {
-        await api.post(`/courses/${courseId}/wishlist`);
-        setWishlistIds([...wishlistIds, courseId]);
-        toast.success('Added to wishlist!');
-      }
+      await api.delete(`/courses/${courseId}/wishlist`);
+      // Update local state
+      setCourses(courses.filter((course) => course.id !== courseId));
+      toast.success('Removed from wishlist');
+      
+      // Dispatch custom event to notify Sidebar count update
       window.dispatchEvent(new Event('wishlistUpdated'));
     } catch (err) {
       console.error(err);
-      toast.error('Failed to update wishlist');
+      toast.error('Failed to remove course from wishlist');
     }
   };
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setCategory('All');
-    setLevel('All');
-    setSortBy('Default');
-  };
-
-  const isFilterActive = searchTerm !== '' || category !== 'All' || level !== 'All' || sortBy !== 'Default';
-
-  // Compute filtered courses
-  const filteredCourses = courses.filter((course) => {
-    // 1. Search filter
-    const searchLower = searchTerm.toLowerCase();
-    const titleMatch = course.title?.toLowerCase().includes(searchLower);
-    const descMatch = course.description?.toLowerCase().includes(searchLower);
-    const instMatch = course.instructor?.toLowerCase().includes(searchLower);
-    
-    let tagsMatch = false;
-    if (course.tags) {
-      if (Array.isArray(course.tags)) {
-        tagsMatch = course.tags.some(tag => tag.toLowerCase().includes(searchLower));
-      } else {
-        tagsMatch = course.tags.toLowerCase().includes(searchLower);
-      }
-    }
-    const matchesSearch = !searchTerm || titleMatch || descMatch || instMatch || tagsMatch;
-
-    // 2. Category filter
-    const matchesCategory = category === 'All' || course.category?.toLowerCase() === category.toLowerCase();
-
-    // 3. Level filter
-    const matchesLevel = level === 'All' || course.level?.toLowerCase() === level.toLowerCase();
-
-    return matchesSearch && matchesCategory && matchesLevel;
-  });
-
-  // Compute sorted courses
-  const sortedCourses = [...filteredCourses].sort((a, b) => {
-    if (sortBy === 'Highest Rated') {
-      return (b.rating || 0) - (a.rating || 0);
-    }
-    if (sortBy === 'Lowest Price') {
-      return (a.price || 0) - (b.price || 0);
-    }
-    if (sortBy === 'Most Enrolled') {
-      return (b.enrollment_count || 0) - (a.enrollment_count || 0);
-    }
-    return 0; // Default: Original order
-  });
 
   if (loading) {
     return (
@@ -149,144 +80,10 @@ export default function Courses() {
           mb: 4,
         }}
       >
-        📚 All Courses
+        ❤️ My Wishlist
       </Typography>
 
-      {/* Search and Filters panel */}
-      <Card
-        sx={{
-          p: 3,
-          mb: 3,
-          borderRadius: '12px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-          backgroundColor: '#ffffff',
-          border: '1px solid #f1f5f9',
-        }}
-      >
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          alignItems="center"
-          sx={{ width: '100%' }}
-        >
-          {/* Search Input */}
-          <TextField
-            placeholder="Search courses by title, instructor, or tag..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            fullWidth
-            size="small"
-            sx={{ maxWidth: { md: '500px' } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#94a3b8' }} />
-                </InputAdornment>
-              ),
-              endAdornment: searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton onClick={() => setSearchTerm('')} edge="end" size="small">
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              )
-            }}
-          />
-          
-          {/* Category Dropdown */}
-          <FormControl size="small" fullWidth sx={{ maxWidth: { md: '180px' } }}>
-            <InputLabel id="category-label">Category</InputLabel>
-            <Select
-              labelId="category-label"
-              value={category}
-              label="Category"
-              onChange={(e) => setCategory(e.target.value)}
-              sx={{ borderRadius: '8px' }}
-            >
-              <MenuItem value="All">All Categories</MenuItem>
-              <MenuItem value="Programming">Programming</MenuItem>
-              <MenuItem value="Web Dev">Web Dev</MenuItem>
-              <MenuItem value="Data Science">Data Science</MenuItem>
-              <MenuItem value="ML">ML</MenuItem>
-              <MenuItem value="AI">AI</MenuItem>
-              <MenuItem value="Mobile Dev">Mobile Dev</MenuItem>
-              <MenuItem value="Cloud">Cloud</MenuItem>
-              <MenuItem value="Cybersecurity">Cybersecurity</MenuItem>
-              <MenuItem value="Design">Design</MenuItem>
-              <MenuItem value="Business">Business</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* Level Dropdown */}
-          <FormControl size="small" fullWidth sx={{ maxWidth: { md: '150px' } }}>
-            <InputLabel id="level-label">Level</InputLabel>
-            <Select
-              labelId="level-label"
-              value={level}
-              label="Level"
-              onChange={(e) => setLevel(e.target.value)}
-              sx={{ borderRadius: '8px' }}
-            >
-              <MenuItem value="All">All Levels</MenuItem>
-              <MenuItem value="Beginner">Beginner</MenuItem>
-              <MenuItem value="Intermediate">Intermediate</MenuItem>
-              <MenuItem value="Advanced">Advanced</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* Sort Dropdown */}
-          <FormControl size="small" fullWidth sx={{ maxWidth: { md: '150px' } }}>
-            <InputLabel id="sort-label">Sort By</InputLabel>
-            <Select
-              labelId="sort-label"
-              value={sortBy}
-              label="Sort By"
-              onChange={(e) => setSortBy(e.target.value)}
-              sx={{ borderRadius: '8px' }}
-            >
-              <MenuItem value="Default">Default</MenuItem>
-              <MenuItem value="Highest Rated">Highest Rated</MenuItem>
-              <MenuItem value="Lowest Price">Lowest Price</MenuItem>
-              <MenuItem value="Most Enrolled">Most Enrolled</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* Clear Button */}
-          {isFilterActive && (
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<ClearIcon />}
-              onClick={handleClearFilters}
-              sx={{
-                borderRadius: '8px',
-                textTransform: 'none',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
-                py: 1,
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </Stack>
-      </Card>
-
-      {/* Results count label */}
-      <Typography
-        variant="body2"
-        sx={{
-          color: '#64748b',
-          fontWeight: 600,
-          fontFamily: "'Outfit', sans-serif",
-          mb: 3,
-        }}
-      >
-        Showing {sortedCourses.length} of {courses.length} courses
-      </Typography>
-
-      {/* Render Grid or Empty State */}
-      {sortedCourses.length === 0 ? (
+      {courses.length === 0 ? (
         <Box
           sx={{
             display: 'flex',
@@ -302,18 +99,19 @@ export default function Courses() {
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
           }}
         >
-          <SearchOffIcon sx={{ fontSize: 70, color: '#cbd5e1', mb: 2 }} />
+          <FavoriteBorderIcon sx={{ fontSize: 70, color: '#cbd5e1', mb: 2 }} />
           <Typography variant="h6" sx={{ fontWeight: 800, color: '#334155', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
-            No courses found
+            Your wishlist is empty
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mb: 3, fontFamily: "'Outfit', sans-serif" }}>
-            Try adjusting your search or filters
+            Explore our catalog to save courses you want to take later.
           </Typography>
           <Button
             variant="contained"
-            onClick={handleClearFilters}
+            onClick={() => navigate('/courses')}
+            endIcon={<ArrowForwardIcon />}
             sx={{
-              py: 1,
+              py: 1.25,
               px: 3,
               borderRadius: '8px',
               textTransform: 'none',
@@ -322,12 +120,12 @@ export default function Courses() {
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             }}
           >
-            Clear All Filters
+            Browse Courses
           </Button>
         </Box>
       ) : (
         <Grid container spacing={4}>
-          {sortedCourses.map((course) => {
+          {courses.map((course) => {
             const priceText = course.price === 0 || !course.price ? 'FREE' : `$${course.price.toFixed(2)}`;
             const thumbnail = course.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
 
@@ -352,7 +150,7 @@ export default function Courses() {
                 >
                   {/* Heart Toggle Button - Top Right Overlay */}
                   <IconButton
-                    onClick={(e) => handleWishlistToggle(e, course.id)}
+                    onClick={(e) => handleRemoveFromWishlist(e, course.id)}
                     sx={{
                       position: 'absolute',
                       top: 12,
@@ -365,15 +163,11 @@ export default function Courses() {
                         transform: 'scale(1.1)',
                       },
                       transition: 'all 0.2s',
-                      color: wishlistIds.includes(course.id) ? '#ef4444' : '#64748b',
+                      color: '#ef4444',
                     }}
                     size="small"
                   >
-                    {wishlistIds.includes(course.id) ? (
-                      <FavoriteIcon fontSize="small" />
-                    ) : (
-                      <FavoriteBorderIcon fontSize="small" />
-                    )}
+                    <FavoriteIcon fontSize="small" />
                   </IconButton>
 
                   <CardActionArea
@@ -408,14 +202,14 @@ export default function Courses() {
                           boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
                         }}
                       />
-                      {/* Level Badge - Top Right */}
+                      {/* Level Badge - below Category badge or slightly shifted */}
                       <Chip
                         label={course.level}
                         size="small"
                         sx={{
                           position: 'absolute',
-                          top: 12,
-                          right: 12,
+                          top: 48,
+                          left: 12,
                           backgroundColor: '#ffffff',
                           color: '#475569',
                           fontWeight: 700,
@@ -504,4 +298,3 @@ export default function Courses() {
     </Box>
   );
 }
-

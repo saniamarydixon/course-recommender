@@ -23,6 +23,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import StarRateIcon from '@mui/icons-material/StarRate';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
@@ -110,6 +111,10 @@ export default function Profile() {
     localStorage.removeItem('user');
     navigate('/login');
   };
+
+  const coursesInProgress = enrolledCourses.filter(item => item.progress < 100).length;
+  const coursesCompleted = enrolledCourses.filter(item => item.progress >= 100).length;
+  const totalHours = enrolledCourses.reduce((sum, item) => sum + (item.course?.duration_hours || 0), 0);
 
   if (!user) {
     return (
@@ -254,6 +259,42 @@ export default function Profile() {
                   </Stack>
                   <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e293b', fontFamily: "'Outfit', sans-serif" }}>
                     {enrolledCourses.length}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <SchoolIcon sx={{ color: '#3b82f6' }} />
+                    <Typography variant="body2" sx={{ color: '#475569', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
+                      In Progress
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e293b', fontFamily: "'Outfit', sans-serif" }}>
+                    {coursesInProgress}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <CheckCircleIcon sx={{ color: '#22c55e' }} />
+                    <Typography variant="body2" sx={{ color: '#475569', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
+                      Courses Completed
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e293b', fontFamily: "'Outfit', sans-serif" }}>
+                    {coursesCompleted}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <SchoolIcon sx={{ color: '#8b5cf6' }} />
+                    <Typography variant="body2" sx={{ color: '#475569', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
+                      Hours of Learning
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#1e293b', fontFamily: "'Outfit', sans-serif" }}>
+                    {totalHours} hrs
                   </Typography>
                 </Box>
 
@@ -480,7 +521,7 @@ export default function Profile() {
                           sx={{ display: 'block' }}
                         >
                           <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={8}>
+                            <Grid item xs={12} sm={6}>
                               <ListItemText
                                 primary={
                                   <Typography
@@ -498,16 +539,30 @@ export default function Profile() {
                                   </Typography>
                                 }
                                 secondary={
-                                  <Typography
-                                    variant="body2"
-                                    sx={{
-                                      color: '#64748b',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      mt: 0.5,
-                                    }}
-                                  >
-                                    Category: {c.category} | Level: {c.level}
-                                  </Typography>
+                                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        color: '#64748b',
+                                        fontFamily: "'Outfit', sans-serif",
+                                      }}
+                                    >
+                                      Category: {c.category} | Level: {c.level}
+                                    </Typography>
+                                    <Chip
+                                      label={item.progress >= 100 ? 'Completed' : 'In Progress'}
+                                      size="small"
+                                      sx={{
+                                        fontSize: '0.65rem',
+                                        height: 20,
+                                        fontWeight: 700,
+                                        fontFamily: "'Outfit', sans-serif",
+                                        backgroundColor: item.progress >= 100 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(102, 126, 234, 0.1)',
+                                        color: item.progress >= 100 ? '#22c55e' : '#667eea',
+                                        border: item.progress >= 100 ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(102, 126, 234, 0.2)',
+                                      }}
+                                    />
+                                  </Stack>
                                 }
                               />
                             </Grid>
@@ -530,11 +585,32 @@ export default function Profile() {
                                     backgroundColor: '#e2e8f0',
                                     '& .MuiLinearProgress-bar': {
                                       borderRadius: 4,
-                                      backgroundColor: '#667eea',
+                                      backgroundColor: item.progress >= 100 ? '#22c55e' : '#667eea',
                                     },
                                   }}
                                 />
                               </Box>
+                            </Grid>
+                            <Grid item xs={12} sm={2} sx={{ textAlign: { sm: 'right' } }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => navigate(`/courses/${c.id}`)}
+                                sx={{
+                                  borderRadius: '8px',
+                                  textTransform: 'none',
+                                  fontWeight: 700,
+                                  fontFamily: "'Outfit', sans-serif",
+                                  borderColor: '#e2e8f0',
+                                  color: '#667eea',
+                                  '&:hover': {
+                                    borderColor: '#667eea',
+                                    backgroundColor: 'rgba(102, 126, 234, 0.04)',
+                                  },
+                                }}
+                              >
+                                {item.progress >= 100 ? 'Review' : 'Continue'}
+                              </Button>
                             </Grid>
                           </Grid>
                         </ListItem>

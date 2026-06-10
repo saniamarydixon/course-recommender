@@ -17,8 +17,11 @@ import {
   OutlinedInput,
   CardActionArea,
   CardMedia,
+  IconButton,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
@@ -43,9 +46,40 @@ export default function Recommendations() {
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('Rule-Based (Default)');
   const [recommendations, setRecommendations] = useState([]);
+  const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
+
+  const fetchWishlist = async () => {
+    try {
+      const res = await api.get('/users/me/wishlist');
+      setWishlistIds(res.data.map(c => c.id));
+    } catch (err) {
+      console.error("Failed to fetch wishlist:", err);
+    }
+  };
+
+  const handleWishlistToggle = async (e, courseId) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const isWishlisted = wishlistIds.includes(courseId);
+    try {
+      if (isWishlisted) {
+        await api.delete(`/courses/${courseId}/wishlist`);
+        setWishlistIds(wishlistIds.filter(id => id !== courseId));
+        toast.success('Removed from wishlist');
+      } else {
+        await api.post(`/courses/${courseId}/wishlist`);
+        setWishlistIds([...wishlistIds, courseId]);
+        toast.success('Added to wishlist!');
+      }
+      window.dispatchEvent(new Event('wishlistUpdated'));
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update wishlist');
+    }
+  };
 
   const handleCategoryChange = (event) => {
     const {
@@ -94,6 +128,7 @@ export default function Recommendations() {
 
   useEffect(() => {
     fetchRecommendations();
+    fetchWishlist();
   }, []);
 
   const handleRegenerate = () => {
@@ -272,8 +307,35 @@ export default function Recommendations() {
                           boxShadow: '0 12px 20px -3px rgba(0, 0, 0, 0.1)',
                         },
                         overflow: 'hidden',
+                        position: 'relative',
                       }}
                     >
+                      {/* Heart Toggle Button - Top Right Overlay */}
+                      <IconButton
+                        onClick={(e) => handleWishlistToggle(e, course.id)}
+                        sx={{
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          zIndex: 10,
+                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                          '&:hover': {
+                            backgroundColor: '#ffffff',
+                            transform: 'scale(1.1)',
+                          },
+                          transition: 'all 0.2s',
+                          color: wishlistIds.includes(course.id) ? '#ef4444' : '#64748b',
+                        }}
+                        size="small"
+                      >
+                        {wishlistIds.includes(course.id) ? (
+                          <FavoriteIcon fontSize="small" />
+                        ) : (
+                          <FavoriteBorderIcon fontSize="small" />
+                        )}
+                      </IconButton>
+
                       <CardActionArea
                         onClick={() => navigate(`/courses/${course.id}`)}
                         sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -9,12 +9,15 @@ import {
   ListItemIcon,
   ListItemText,
   Typography,
+  Badge,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import PersonIcon from '@mui/icons-material/Person';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import api from '../../services/api';
 
 const DRAWER_WIDTH = 260;
 
@@ -23,12 +26,40 @@ const menuItems = [
   { text: 'Courses', icon: <LibraryBooksIcon />, path: '/courses' },
   { text: 'AI Recommendations', icon: <AutoAwesomeIcon />, path: '/recommendations' },
   { text: 'Learning Paths', icon: <TimelineIcon />, path: '/learning-paths' },
+  { text: 'Wishlist', icon: <FavoriteIcon />, path: '/wishlist' },
   { text: 'My Profile', icon: <PersonIcon />, path: '/profile' },
 ];
 
 export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [wishlistCount, setWishlistCount] = useState(0);
+
+  const fetchWishlistCount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await api.get('/users/me/wishlist');
+      setWishlistCount(res.data.length);
+    } catch (err) {
+      console.error("Failed to fetch wishlist count:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchWishlistCount();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleWishlistUpdate = () => {
+      fetchWishlistCount();
+    };
+
+    window.addEventListener('wishlistUpdated', handleWishlistUpdate);
+    return () => {
+      window.removeEventListener('wishlistUpdated', handleWishlistUpdate);
+    };
+  }, []);
 
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -93,7 +124,13 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
                     transition: 'color 0.2s ease-in-out',
                   }}
                 >
-                  {item.icon}
+                  {item.text === 'Wishlist' ? (
+                    <Badge badgeContent={wishlistCount} color="error" sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem', height: 16, minWidth: 16 } }}>
+                      {item.icon}
+                    </Badge>
+                  ) : (
+                    item.icon
+                  )}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}

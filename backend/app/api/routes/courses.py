@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
 from app.database import get_db
 from app.models.user import User
@@ -9,6 +10,10 @@ from app.services.interaction_service import InteractionService
 from app.utils.dependencies import get_current_user
 
 router = APIRouter()
+
+
+class ProgressUpdate(BaseModel):
+    progress: int = Field(..., ge=0, le=100)
 
 
 @router.get("/test")
@@ -35,9 +40,10 @@ def get_course(course_id: int, db: Session = Depends(get_db)):
     return course
 
 
-@router.post("/{course_id}/enroll", response_model=CourseResponse)
+@router.post("/{course_id}/enroll")
 def enroll_in_course(
     course_id: int,
+    body: dict = Body(default={}),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -46,7 +52,102 @@ def enroll_in_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
 
     InteractionService(db).enroll_user_in_course(current_user, course)
-    return course
+    return {"message": "Enrolled successfully"}
+
+
+@router.delete("/{course_id}/enroll")
+def unenroll_from_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = CourseService(db).get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    unenroll_success = InteractionService(db).unenroll_user_from_course(current_user.id, course_id)
+    if not unenroll_success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enrolled in this course")
+    return {"message": "Successfully unenrolled"}
+
+
+@router.get("/{course_id}/enrollment-status")
+def get_enrollment_status(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Check if enrolled
+    enrollments = InteractionService(db).get_user_enrollments(current_user.id)
+    for enrollment in enrollments:
+        if enrollment.course_id == course_id:
+            return {"is_enrolled": True, "progress": enrollment.progress or 0}
+    return {"is_enrolled": False, "progress": 0}
+
+
+@router.post("/{course_id}/wishlist")
+def add_to_wishlist(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = CourseService(db).get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    InteractionService(db).add_course_to_wishlist(current_user.id, course_id)
+    return {"message": "Added to wishlist"}
+
+
+@router.delete("/{course_id}/wishlist")
+def remove_from_wishlist(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = CourseService(db).get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    removed = InteractionService(db).remove_course_from_wishlist(current_user.id, course_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not in wishlist")
+    return {"message": "Removed from wishlist"}
+
+
+@router.put("/{course_id}/progress")
+def update_course_progress(
+    course_id: int,
+    progress_data: ProgressUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = CourseService(db).get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    interaction = InteractionService(db).update_interaction_progress(
+        current_user.id, course_id, progress_data.progress
+    )
+    if not interaction:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enrolled in this course")
+    return {"message": "Progress updated successfully", "progress": interaction.progress}
+
+
+@router.post("/{course_id}/complete")
+def complete_enrolled_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = CourseService(db).get_by_id(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    interaction = InteractionService(db).complete_course(current_user.id, course_id)
+    if not interaction:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to complete course")
+    return {"message": "Course marked as completed"}
 
 
 @router.post("/", response_model=CourseResponse, status_code=201)

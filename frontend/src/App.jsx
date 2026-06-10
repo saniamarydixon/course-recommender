@@ -15,6 +15,7 @@ import CourseDetail from './pages/CourseDetail';
 import Recommendations from './pages/Recommendations';
 import Profile from './pages/Profile';
 import LearningRoadmap from './pages/LearningRoadmap';
+import Wishlist from './pages/Wishlist';
 
 // Create a custom Material-UI theme
 const theme = createTheme({
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="recommendations" element={<Recommendations />} />
           <Route path="profile" element={<Profile />} />
           <Route path="learning-paths" element={<LearningRoadmap />} />
+          <Route path="wishlist" element={<Wishlist />} />
           
           {/* Fallback inside Layout */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

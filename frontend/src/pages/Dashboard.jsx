@@ -10,6 +10,7 @@ import {
   Avatar,
   Stack,
   useTheme,
+  LinearProgress,
 } from '@mui/material';
 import BookIcon from '@mui/icons-material/Book';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -20,6 +21,7 @@ import api from '../services/api';
 
 export default function Dashboard() {
   const [username, setUsername] = useState('User');
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [stats, setStats] = useState({
     totalCourses: 25,
     recommendations: 9,
@@ -54,6 +56,7 @@ export default function Dashboard() {
         // Fetch enrolled courses
         const enrollRes = await api.get('/users/me/enrolled-courses');
         const enrolledC = enrollRes.data.length || 0;
+        setEnrolledCourses(enrollRes.data);
 
         // Fetch recommendations history
         const recRes = await api.get('/recommendations/history');
@@ -171,6 +174,121 @@ export default function Dashboard() {
           </Grid>
         ))}
       </Grid>
+
+      {/* Continue Learning Section */}
+      {(() => {
+        const inProgressCourses = enrolledCourses.filter(item => item.progress < 100);
+        if (inProgressCourses.length === 0) return null;
+        return (
+          <Box sx={{ mb: 5 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 800,
+                color: '#1e293b',
+                fontFamily: "'Outfit', sans-serif",
+                mb: 3,
+              }}
+            >
+              🏃 Continue Learning
+            </Typography>
+            <Grid container spacing={3}>
+              {inProgressCourses.map((item) => {
+                const c = item.course;
+                if (!c) return null;
+                const thumbnail = c.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={c.id}>
+                    <Card
+                      sx={{
+                        borderRadius: '16px',
+                        border: '1px solid #f1f5f9',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        },
+                      }}
+                    >
+                      <Box sx={{ height: 140, overflow: 'hidden', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                        <img
+                          src={thumbnail}
+                          alt={c.title}
+                          style={{ height: '100%', width: '100%', objectFit: 'cover' }}
+                        />
+                      </Box>
+                      <CardContent sx={{ p: 3 }}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 800,
+                            color: '#1e293b',
+                            fontFamily: "'Outfit', sans-serif",
+                            lineHeight: 1.3,
+                            mb: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            height: '2.6rem',
+                          }}
+                        >
+                          {c.title}
+                        </Typography>
+
+                        <Box sx={{ mb: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
+                              Progress
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: '#667eea', fontFamily: "'Outfit', sans-serif" }}>
+                              {item.progress}%
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={item.progress}
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: '#e2e8f0',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 3,
+                                backgroundColor: '#667eea',
+                              },
+                            }}
+                          />
+                        </Box>
+
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          onClick={() => navigate(`/courses/${c.id}`)}
+                          sx={{
+                            py: 1,
+                            borderRadius: '8px',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            fontFamily: "'Outfit', sans-serif",
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            boxShadow: '0 2px 4px rgba(102, 126, 234, 0.2)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
+                            },
+                          }}
+                        >
+                          Resume Learning
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        );
+      })()}
 
       {/* Quick Actions */}
       <Typography
