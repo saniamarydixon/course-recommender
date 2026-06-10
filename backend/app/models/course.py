@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, Integer, String, Text, func, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +23,7 @@ class Course(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    has_certificate: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

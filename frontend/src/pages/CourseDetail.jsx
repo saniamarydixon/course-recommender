@@ -27,6 +27,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StarIcon from '@mui/icons-material/Star';
 import { toast } from 'react-toastify';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import CertificateModal from '../components/Certificate/CertificateModal';
 import api from '../services/api';
 
 export default function CourseDetail() {
@@ -37,6 +39,13 @@ export default function CourseDetail() {
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [certOpen, setCertOpen] = useState(false);
+
+  const handleCopyShareableLink = () => {
+    const courseUrl = `${window.location.origin}/courses/${id}`;
+    navigator.clipboard.writeText(courseUrl);
+    toast.success("Shareable course completion link copied to clipboard!");
+  };
 
   // Reviews and current user states
   const [reviews, setReviews] = useState([]);
@@ -749,6 +758,52 @@ export default function CourseDetail() {
                   </Typography>
                 </Box>
 
+                {progress >= 100 && course.has_certificate && (
+                  <Stack spacing={1}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<WorkspacePremiumIcon sx={{ color: '#ffd700 !important' }} />}
+                      onClick={() => setCertOpen(true)}
+                      sx={{
+                        py: 1,
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif",
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: '#ffffff',
+                        boxShadow: '0 4px 10px rgba(102, 126, 234, 0.3)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5a6fd6 0%, #693db6 100%)',
+                        },
+                      }}
+                    >
+                      Download Certificate
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={handleCopyShareableLink}
+                      sx={{
+                        py: 0.75,
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif",
+                        color: '#667eea',
+                        borderColor: '#667eea',
+                        '&:hover': {
+                          borderColor: '#5a6fd6',
+                          backgroundColor: 'rgba(102, 126, 234, 0.04)',
+                        },
+                      }}
+                    >
+                      Share Certificate
+                    </Button>
+                  </Stack>
+                )}
+
                 {/* Progress bar */}
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -914,6 +969,12 @@ export default function CourseDetail() {
           </Card>
         </Grid>
       </Grid>
+      <CertificateModal
+        open={certOpen}
+        onClose={() => setCertOpen(false)}
+        courseId={parseInt(id)}
+        courseTitle={course?.title || ''}
+      />
     </Box>
   );
 }

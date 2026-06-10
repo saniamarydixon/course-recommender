@@ -17,6 +17,7 @@ class CourseBase(BaseModel):
     thumbnail_url: str | None = Field(None, max_length=500)
     url: str | None = None
     tags: str | None = None
+    has_certificate: bool = True
 
 
 class CourseCreate(CourseBase):
@@ -37,6 +38,7 @@ class CourseUpdate(BaseModel):
     thumbnail_url: str | None = Field(None, max_length=500)
     url: str | None = None
     tags: str | None = None
+    has_certificate: bool | None = None
 
 
 class CourseResponse(CourseBase):
@@ -47,3 +49,12 @@ class CourseResponse(CourseBase):
     updated_at: datetime
     average_rating: float = 0.0
     total_reviews: int = 0
+
+
+class CourseSearchResponse(BaseModel):
+    courses: list[CourseResponse]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+

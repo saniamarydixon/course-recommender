@@ -26,3 +26,5 @@ def database_health_check(db: Session = Depends(get_db)):
         return {"status": "healthy", "database": "connected"}
     except Exception as exc:
         return {"status": "unhealthy", "database": "disconnected", "detail": str(exc)}
+
+

@@ -40,6 +40,8 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import LaunchIcon from '@mui/icons-material/Launch';
 import Rating from '@mui/material/Rating';
 import { toast } from 'react-toastify';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import CertificateModal from '../components/Certificate/CertificateModal';
 import api from '../services/api';
 
 const CATEGORIES = [
@@ -62,6 +64,16 @@ export default function Profile() {
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [certOpen, setCertOpen] = useState(false);
+  const [activeCourseId, setActiveCourseId] = useState(null);
+  const [activeCourseTitle, setActiveCourseTitle] = useState('');
+
+  const handleOpenCertificate = (courseId, courseTitle) => {
+    setActiveCourseId(courseId);
+    setActiveCourseTitle(courseTitle);
+    setCertOpen(true);
+  };
+
   const navigate = useNavigate();
 
   // Edit Mode state
@@ -1173,6 +1185,22 @@ export default function Profile() {
                                         border: item.progress >= 100 ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(102, 126, 234, 0.2)',
                                       }}
                                     />
+                                    {item.progress >= 100 && c.has_certificate && (
+                                      <Chip
+                                        icon={<WorkspacePremiumIcon sx={{ color: '#ffd700 !important', fontSize: '0.9rem !important' }} />}
+                                        label="Certificate Earned"
+                                        size="small"
+                                        sx={{
+                                          fontSize: '0.65rem',
+                                          height: 20,
+                                          fontWeight: 700,
+                                          fontFamily: "'Outfit', sans-serif",
+                                          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                                          color: '#ffffff',
+                                          border: '1px solid rgba(255, 215, 0, 0.3)',
+                                        }}
+                                      />
+                                    )}
                                   </Stack>
                                 }
                               />
@@ -1202,26 +1230,54 @@ export default function Profile() {
                                 />
                               </Box>
                             </Grid>
-                            <Grid item xs={12} sm={2} sx={{ textAlign: { sm: 'right' } }}>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => navigate(`/courses/${c.id}`)}
-                                sx={{
-                                  borderRadius: '8px',
-                                  textTransform: 'none',
-                                  fontWeight: 700,
-                                  fontFamily: "'Outfit', sans-serif",
-                                  borderColor: '#e2e8f0',
-                                  color: '#667eea',
-                                  '&:hover': {
-                                    borderColor: '#667eea',
-                                    backgroundColor: 'rgba(102, 126, 234, 0.04)',
-                                  },
-                                }}
-                              >
-                                {item.progress >= 100 ? 'Review' : 'Continue'}
-                              </Button>
+                            <Grid item xs={12} sm={2.5} sx={{ textAlign: { sm: 'right' } }}>
+                              <Stack spacing={1} alignItems={{ xs: 'flex-start', sm: 'flex-end' }}>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => navigate(`/courses/${c.id}`)}
+                                  sx={{
+                                    borderRadius: '8px',
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    fontFamily: "'Outfit', sans-serif",
+                                    borderColor: '#e2e8f0',
+                                    color: '#667eea',
+                                    width: '100%',
+                                    maxWidth: '130px',
+                                    '&:hover': {
+                                      borderColor: '#667eea',
+                                      backgroundColor: 'rgba(102, 126, 234, 0.04)',
+                                    },
+                                  }}
+                                >
+                                  {item.progress >= 100 ? 'Review' : 'Continue'}
+                                </Button>
+                                {item.progress >= 100 && c.has_certificate && (
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={() => handleOpenCertificate(c.id, c.title)}
+                                    sx={{
+                                      borderRadius: '8px',
+                                      textTransform: 'none',
+                                      fontWeight: 700,
+                                      fontFamily: "'Outfit', sans-serif",
+                                      background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
+                                      color: '#1e293b',
+                                      fontSize: '0.7rem',
+                                      width: '100%',
+                                      maxWidth: '130px',
+                                      boxShadow: 'none',
+                                      '&:hover': {
+                                        background: 'linear-gradient(135deg, #e5b800 0%, #b8901c 100%)',
+                                      },
+                                    }}
+                                  >
+                                    Certificate
+                                  </Button>
+                                )}
+                              </Stack>
                             </Grid>
                           </Grid>
                         </ListItem>
@@ -1234,6 +1290,18 @@ export default function Profile() {
           </Stack>
         </Grid>
       </Grid>
+      {activeCourseId && (
+        <CertificateModal
+          open={certOpen}
+          onClose={() => {
+            setCertOpen(false);
+            setActiveCourseId(null);
+            setActiveCourseTitle('');
+          }}
+          courseId={activeCourseId}
+          courseTitle={activeCourseTitle}
+        />
+      )}
     </Box>
   );
 }
