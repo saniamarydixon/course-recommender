@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import auth, courses, health, recommendations, roadmap, users
+from app.api.routes import auth, courses, health, recommendations, roadmap, users, chatbot
 
 api_router = APIRouter()
 
@@ -12,3 +12,5 @@ api_router.include_router(
     recommendations.router, prefix="/recommendations", tags=["Recommendations"]
 )
 api_router.include_router(roadmap.router, prefix="/roadmap", tags=["Roadmaps"])
+api_router.include_router(chatbot.router, prefix="/chatbot", tags=["Chatbot"])
+

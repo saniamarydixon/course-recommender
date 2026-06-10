@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
+    # Gemini API Key
+    GEMINI_API_KEY: str = "your-gemini-api-key-here"
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
     redis_enabled: bool = False

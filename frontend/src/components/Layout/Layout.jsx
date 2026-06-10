@@ -16,6 +16,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import Sidebar from './Sidebar';
 import api from '../../services/api';
+import ChatButton from '../Chatbot/ChatButton';
 
 const DRAWER_WIDTH = 260;
 
@@ -227,6 +228,9 @@ export default function Layout() {
       >
         <Outlet />
       </Box>
+
+      {/* Floating AI Chatbot Assistant */}
+      <ChatButton />
     </Box>
   );
 }
