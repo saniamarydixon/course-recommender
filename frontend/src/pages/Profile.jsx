@@ -67,6 +67,8 @@ export default function Profile() {
   const [certOpen, setCertOpen] = useState(false);
   const [activeCourseId, setActiveCourseId] = useState(null);
   const [activeCourseTitle, setActiveCourseTitle] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const handleOpenCertificate = (courseId, courseTitle) => {
     setActiveCourseId(courseId);
@@ -92,40 +94,55 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarUrlInput, setAvatarUrlInput] = useState('');
 
-  const fetchProfileData = async () => {
-    try {
-      const userRes = await api.get('/users/me');
-      setUser(userRes.data);
-      setFullName(userRes.data.full_name || '');
-      setBio(userRes.data.bio || '');
-      setLocation(userRes.data.location || '');
-      setSkills(userRes.data.skills || '');
-      setSocialGithub(userRes.data.social_links?.github || '');
-      setSocialLinkedin(userRes.data.social_links?.linkedin || '');
-      setSocialTwitter(userRes.data.social_links?.twitter || '');
-      setIsPublic(userRes.data.is_public || false);
-      setAvatarUrlInput(userRes.data.avatar_url || '');
-      
-      const interestList = userRes.data.interests
-        ? userRes.data.interests.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-      setSelectedInterests(interestList);
-
-      localStorage.setItem('user', JSON.stringify(userRes.data));
-
-      const enrolledRes = await api.get('/users/me/enrolled-courses');
-      setEnrolledCourses(enrolledRes.data);
-
-      const reviewsRes = await api.get('/users/me/reviews');
-      setMyReviews(reviewsRes.data);
-    } catch (err) {
-      console.error("Failed to fetch profile data:", err);
-      toast.error("Error loading profile details");
-    }
-  };
-
   useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const userRes = await api.get('/users/me', { signal: controller.signal });
+        setUser(userRes.data);
+        setFullName(userRes.data.full_name || '');
+        setBio(userRes.data.bio || '');
+        setLocation(userRes.data.location || '');
+        setSkills(userRes.data.skills || '');
+        setSocialGithub(userRes.data.social_links?.github || '');
+        setSocialLinkedin(userRes.data.social_links?.linkedin || '');
+        setSocialTwitter(userRes.data.social_links?.twitter || '');
+        setIsPublic(userRes.data.is_public || false);
+        setAvatarUrlInput(userRes.data.avatar_url || '');
+        
+        const interestList = userRes.data.interests
+          ? userRes.data.interests.split(',').map(s => s.trim()).filter(Boolean)
+          : [];
+        setSelectedInterests(interestList);
+
+        localStorage.setItem('user', JSON.stringify(userRes.data));
+
+        const enrolledRes = await api.get('/users/me/enrolled-courses', { signal: controller.signal });
+        setEnrolledCourses(enrolledRes.data);
+
+        const reviewsRes = await api.get('/users/me/reviews', { signal: controller.signal });
+        setMyReviews(reviewsRes.data);
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Failed to fetch profile data:", err);
+          setError(err.message || "Error loading profile details");
+          toast.error("Error loading profile details");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchProfileData();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const handleInterestChange = (category) => {
@@ -249,14 +266,53 @@ export default function Profile() {
     navigate('/login');
   };
 
-  const coursesInProgress = enrolledCourses.filter(item => item.progress < 100).length;
-  const coursesCompleted = enrolledCourses.filter(item => item.progress >= 100).length;
-  const totalHours = enrolledCourses.reduce((sum, item) => sum + (item.course?.duration_hours || 0), 0);
+  const coursesInProgress = (enrolledCourses || []).filter(item => item && item.progress < 100).length;
+  const coursesCompleted = (enrolledCourses || []).filter(item => item && item.progress >= 100).length;
+  const totalHours = (enrolledCourses || []).reduce((sum, item) => sum + (item.course?.duration_hours || 0), 0);
 
-  if (!user) {
+  if (loading || !user) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <Typography variant="body1" sx={{ fontFamily: "'Outfit', sans-serif" }}>Loading Profile...</Typography>
+      <Box sx={{ flexGrow: 1, py: 2 }}>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ p: 3, borderRadius: '16px', textAlign: 'center' }}>
+              <Skeleton variant="circular" width={120} height={120} sx={{ mx: 'auto', mb: 2 }} />
+              <Skeleton variant="text" width="60%" height={32} sx={{ mx: 'auto', mb: 1 }} />
+              <Skeleton variant="text" width="40%" height={20} sx={{ mx: 'auto' }} />
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Card sx={{ p: 3, borderRadius: '16px', mb: 4 }}>
+              <Skeleton variant="text" width="30%" height={32} sx={{ mb: 2 }} />
+              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '8px' }} />
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          😕 Failed to load profile
+        </Typography>
+        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          }}
+        >
+          Try Again
+        </Button>
       </Box>
     );
   }

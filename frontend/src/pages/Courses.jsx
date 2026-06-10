@@ -28,6 +28,7 @@ import {
   RadioGroup,
   Pagination,
   Divider,
+  Skeleton,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -93,6 +94,7 @@ export default function Courses() {
   const [coursesData, setCoursesData] = useState({ courses: [], total: 0, page: 1, per_page: 12, pages: 1 });
   const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [localSearch, setLocalSearch] = useState(q);
   const [localPriceRange, setLocalPriceRange] = useState([minPrice, maxPrice]);
 
@@ -125,17 +127,22 @@ export default function Courses() {
 
   // Fetch course list and wishlist ids
   useEffect(() => {
-    api.get('/users/me/wishlist')
+    const controller = new AbortController();
+    api.get('/users/me/wishlist', { signal: controller.signal })
       .then(res => {
-        setWishlistIds(res.data.map(c => c.id));
+        setWishlistIds((res.data || []).map(c => c.id));
       })
       .catch(err => {
-        console.error("Failed to fetch wishlist:", err);
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Failed to fetch wishlist:", err);
+        }
       });
+    return () => controller.abort();
   }, []);
 
-  const fetchFilteredCourses = async () => {
+  const fetchFilteredCourses = async (signal) => {
     setLoading(true);
+    setError(null);
     try {
       const params = {};
       if (q) params.q = q;
@@ -176,18 +183,27 @@ export default function Courses() {
       params.page = page;
       params.per_page = 12;
 
-      const res = await api.get('/courses/search', { params });
+      const res = await api.get('/courses/search', { params, signal });
       setCoursesData(res.data);
     } catch (err) {
-      console.error("Failed to search courses:", err);
-      toast.error("Failed to load courses");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Failed to search courses:", err);
+        setError(err.message || 'Failed to search courses');
+        toast.error("Failed to load courses");
+      }
     } finally {
-      setLoading(false);
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchFilteredCourses();
+    const controller = new AbortController();
+    fetchFilteredCourses(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [searchParams]);
 
   // Wishlist actions
@@ -764,7 +780,7 @@ export default function Courses() {
                   fontFamily: "'Outfit', sans-serif",
                 }}
               >
-                Showing {coursesData.courses.length} of {coursesData.total} courses
+                Showing {(coursesData?.courses || []).length} of {(coursesData?.total || 0)} courses
               </Typography>
             </Stack>
 
@@ -853,10 +869,42 @@ export default function Courses() {
 
           {/* Results courses list or empty state */}
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 10 }}>
-              <CircularProgress color="primary" />
+            <Grid container spacing={3}>
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Grid item xs={12} sm={6} md={4} key={i}>
+                  <Card sx={{ borderRadius: '16px', border: '1px solid #e2e8f0', p: 0 }}>
+                    <Skeleton variant="rounded" height={160} />
+                    <CardContent sx={{ p: 2 }}>
+                      <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
+                      <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
+                      <Skeleton variant="rounded" height={36} />
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : error ? (
+            <Box sx={{ p: 4, textAlign: 'center', width: '100%', bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+              <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>
+                😕 Failed to load courses
+              </Typography>
+              <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+                {error}
+              </Typography>
+              <Button 
+                variant="contained" 
+                onClick={() => fetchFilteredCourses()}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontFamily: "'Outfit', sans-serif",
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                }}
+              >
+                Retry
+              </Button>
             </Box>
-          ) : coursesData.courses.length === 0 ? (
+          ) : (coursesData?.courses || []).length === 0 ? (
             <Box
               sx={{
                 display: 'flex',
@@ -898,7 +946,7 @@ export default function Courses() {
           ) : (
             <>
               <Grid container spacing={3}>
-                {coursesData.courses.map((course) => {
+                {(coursesData?.courses || []).map((course) => {
                   const priceText = course.price === 0 || !course.price ? 'FREE' : `$${course.price.toFixed(2)}`;
                   const thumbnail = course.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
 

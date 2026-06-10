@@ -18,6 +18,7 @@ import {
   CardActionArea,
   CardMedia,
   IconButton,
+  Skeleton,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -48,17 +49,9 @@ export default function Recommendations() {
   const [recommendations, setRecommendations] = useState([]);
   const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
-
-  const fetchWishlist = async () => {
-    try {
-      const res = await api.get('/users/me/wishlist');
-      setWishlistIds(res.data.map(c => c.id));
-    } catch (err) {
-      console.error("Failed to fetch wishlist:", err);
-    }
-  };
 
   const handleWishlistToggle = async (e, courseId) => {
     e.stopPropagation();
@@ -91,13 +84,60 @@ export default function Recommendations() {
     );
   };
 
-  const fetchRecommendations = async (isRegenerate = false) => {
-    if (isRegenerate) {
-      setGenerating(true);
-    } else {
-      setLoading(true);
-    }
+  const fetchRecommendations = async (signal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        limit: 9,
+        categories: selectedCategories.length > 0 ? selectedCategories : null,
+        level: selectedLevel || null,
+      };
 
+      let algoParam = 'hybrid';
+      if (selectedAlgorithm === 'Collaborative Filtering') {
+        algoParam = 'collaborative';
+      } else if (selectedAlgorithm === 'Content-Based') {
+        algoParam = 'content';
+      }
+
+      const response = await api.post(`/recommendations/generate?algorithm=${algoParam}`, payload, { signal });
+      setRecommendations(response.data);
+    } catch (err) {
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error(err);
+        setError(err.message || 'Failed to generate recommendations');
+      }
+    } finally {
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const fetchWishlist = async (signal) => {
+    try {
+      const res = await api.get('/users/me/wishlist', { signal });
+      setWishlistIds((res.data || []).map(c => c.id));
+    } catch (err) {
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Failed to fetch wishlist:", err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchRecommendations(controller.signal);
+    fetchWishlist(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  const handleRegenerate = async () => {
+    setGenerating(true);
+    setError(null);
     try {
       const payload = {
         limit: 9,
@@ -114,25 +154,13 @@ export default function Recommendations() {
 
       const response = await api.post(`/recommendations/generate?algorithm=${algoParam}`, payload);
       setRecommendations(response.data);
-      if (isRegenerate) {
-        toast.success('Recommendations regenerated successfully!');
-      }
+      toast.success('Recommendations regenerated successfully!');
     } catch (err) {
       console.error(err);
       toast.error('Failed to generate recommendations');
     } finally {
-      setLoading(false);
       setGenerating(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRecommendations();
-    fetchWishlist();
-  }, []);
-
-  const handleRegenerate = () => {
-    fetchRecommendations(true);
   };
 
   return (
@@ -259,8 +287,40 @@ export default function Recommendations() {
 
       {/* Main Recommended Content */}
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress color="primary" />
+        <Grid container spacing={4}>
+          {[1, 2, 3].map(i => (
+            <Grid item xs={12} sm={6} md={4} key={i}>
+              <Card sx={{ borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <Skeleton variant="rounded" height={180} />
+                <CardContent sx={{ p: 3 }}>
+                  <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
+                  <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
+                  <Skeleton variant="rounded" height={36} />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      ) : error ? (
+        <Box sx={{ p: 4, textAlign: 'center', mt: 4, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>
+            😕 Failed to load recommendations
+          </Typography>
+          <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+            {error}
+          </Typography>
+          <Button 
+            variant="contained" 
+            onClick={() => window.location.reload()}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontFamily: "'Outfit', sans-serif",
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            }}
+          >
+            Retry
+          </Button>
         </Box>
       ) : (
         <Box>
@@ -274,16 +334,16 @@ export default function Recommendations() {
               mb: 3,
             }}
           >
-            Recommended Learning Paths ({recommendations.length} courses)
+            Recommended Learning Paths ({(recommendations || []).length} courses)
           </Typography>
 
-          {recommendations.length === 0 ? (
+          {(recommendations || []).length === 0 ? (
             <Typography variant="body1" sx={{ color: '#64748b', textAlign: 'center', mt: 4, fontFamily: "'Outfit', sans-serif" }}>
               No recommendations found matching these filters. Try choosing different categories or levels.
             </Typography>
           ) : (
             <Grid container spacing={4}>
-              {recommendations.map((rec) => {
+              {(recommendations || []).map((rec) => {
                 const course = rec.course;
                 if (!course) return null;
 

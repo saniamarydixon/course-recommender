@@ -16,6 +16,7 @@ import {
   ListItemText,
   CircularProgress,
   Chip,
+  Skeleton,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead';
@@ -29,30 +30,42 @@ import api from '../services/api';
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const navigate = useNavigate();
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (signal) => {
     try {
-      const res = await api.get('/notifications/');
+      setLoading(true);
+      setError(null);
+      const res = await api.get('/notifications/', { signal });
       setNotifications(res.data);
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
-      toast.error('Failed to load notifications');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Failed to fetch notifications:', err);
+        setError(err.message || 'Failed to load notifications');
+        toast.error('Failed to load notifications');
+      }
     } finally {
-      setLoading(false);
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchNotifications();
+    const controller = new AbortController();
+    fetchNotifications(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const handleMarkRead = async (id) => {
     try {
       await api.put(`/notifications/${id}/read`);
       setNotifications(
-        notifications.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+        (notifications || []).map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
       toast.success('Notification marked as read');
       window.dispatchEvent(new Event('wishlistUpdated')); // Reuse event dispatch to refresh count in layout
@@ -65,7 +78,7 @@ export default function Notifications() {
   const handleMarkAllRead = async () => {
     try {
       await api.put('/notifications/read-all');
-      setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
+      setNotifications((notifications || []).map((n) => ({ ...n, is_read: true })));
       toast.success('All notifications marked as read');
       window.dispatchEvent(new Event('wishlistUpdated'));
     } catch (err) {
@@ -77,7 +90,7 @@ export default function Notifications() {
   const handleDelete = async (id) => {
     try {
       await api.delete(`/notifications/${id}`);
-      setNotifications(notifications.filter((n) => n.id !== id));
+      setNotifications((notifications || []).filter((n) => n.id !== id));
       toast.success('Notification deleted');
       window.dispatchEvent(new Event('wishlistUpdated'));
     } catch (err) {
@@ -90,7 +103,7 @@ export default function Notifications() {
     setFilterType(newValue);
   };
 
-  const filteredNotifications = notifications.filter((notif) => {
+  const filteredNotifications = (notifications || []).filter((notif) => {
     if (filterType === 'all') return true;
     return notif.type === filterType;
   });
@@ -108,8 +121,48 @@ export default function Notifications() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, py: 8 }}>
-        <CircularProgress color="primary" />
+      <Box sx={{ flexGrow: 1, py: 2 }}>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 800,
+            color: '#1e293b',
+            fontFamily: "'Outfit', sans-serif",
+            mb: 4,
+          }}
+        >
+          🔔 Notification Center
+        </Typography>
+        <Stack spacing={2}>
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} variant="rounded" height={80} sx={{ borderRadius: '12px' }} />
+          ))}
+        </Stack>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          😕 Failed to load notifications
+        </Typography>
+        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          }}
+        >
+          Try Again
+        </Button>
       </Box>
     );
   }

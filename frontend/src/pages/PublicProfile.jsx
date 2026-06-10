@@ -18,6 +18,7 @@ import {
   IconButton,
   Link,
   Tooltip,
+  Skeleton,
 } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -40,15 +41,19 @@ export default function PublicProfile() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchPublicProfile = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await api.get(`/users/${username}`);
+        const res = await api.get(`/users/${username}`, { signal: controller.signal });
         setProfileUser(res.data);
       } catch (err) {
-        console.error("Failed to fetch public profile:", err);
-        setError(err.response?.data?.detail || "Could not retrieve profile");
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Failed to fetch public profile:", err);
+          setError(err.response?.data?.detail || err.message || "Could not retrieve profile");
+        }
       } finally {
         setLoading(false);
       }
@@ -57,14 +62,107 @@ export default function PublicProfile() {
     if (username) {
       fetchPublicProfile();
     }
+
+    return () => {
+      controller.abort();
+    };
   }, [username]);
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Typography variant="h6" sx={{ fontFamily: "'Outfit', sans-serif", color: '#64748b' }}>
-          Loading profile...
-        </Typography>
+      <Box sx={{ flexGrow: 1, py: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate(-1)}
+          sx={{
+            mb: 3,
+            color: '#64748b',
+            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            textTransform: 'none',
+            '&:hover': { color: '#667eea', bgcolor: 'transparent' },
+          }}
+        >
+          Back
+        </Button>
+        <Grid container spacing={4}>
+          {/* Left Column Skeleton */}
+          <Grid item xs={12} md={4}>
+            <Card
+              sx={{
+                borderRadius: '24px',
+                border: '1px solid #f1f5f9',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)',
+                textAlign: 'center',
+                p: 4,
+                background: '#ffffff',
+              }}
+            >
+              <Skeleton variant="circular" width={120} height={120} sx={{ mx: 'auto', mb: 2 }} />
+              <Skeleton variant="text" width="60%" height={32} sx={{ mx: 'auto', mb: 1 }} />
+              <Skeleton variant="text" width="40%" height={24} sx={{ mx: 'auto', mb: 2 }} />
+              <Skeleton variant="text" width="50%" height={20} sx={{ mx: 'auto', mb: 2 }} />
+              <Skeleton variant="text" width="30%" height={16} sx={{ mx: 'auto', mb: 3 }} />
+              <Skeleton variant="rectangular" height={45} sx={{ borderRadius: '12px' }} />
+            </Card>
+          </Grid>
+
+          {/* Right Column Skeleton */}
+          <Grid item xs={12} md={8}>
+            <Stack spacing={4}>
+              <Card
+                sx={{
+                  borderRadius: '24px',
+                  border: '1px solid #f1f5f9',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)',
+                  p: 4,
+                }}
+              >
+                <Skeleton variant="text" width="20%" height={32} sx={{ mb: 2 }} />
+                <Skeleton variant="text" width="100%" height={20} sx={{ mb: 1 }} />
+                <Skeleton variant="text" width="95%" height={20} sx={{ mb: 1 }} />
+                <Skeleton variant="text" width="90%" height={20} sx={{ mb: 3 }} />
+                <Divider sx={{ my: 3 }} />
+                <Skeleton variant="text" width="25%" height={28} sx={{ mb: 2 }} />
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {[1, 2, 3, 4].map(idx => (
+                    <Skeleton key={idx} variant="rectangular" width={60} height={28} sx={{ borderRadius: '8px' }} />
+                  ))}
+                </Box>
+              </Card>
+
+              <Card
+                sx={{
+                  borderRadius: '24px',
+                  border: '1px solid #f1f5f9',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)',
+                  p: 4,
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Skeleton variant="text" width="30%" height={32} />
+                  <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: '16px' }} />
+                </Box>
+                <Stack spacing={2.5}>
+                  {[1, 2].map(idx => (
+                    <Box key={idx}>
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={7}>
+                          <Skeleton variant="text" width="70%" height={28} sx={{ mb: 1 }} />
+                          <Skeleton variant="text" width="40%" height={20} />
+                        </Grid>
+                        <Grid item xs={12} sm={5}>
+                          <Skeleton variant="text" width="30%" height={18} sx={{ ml: 'auto', mb: 1 }} />
+                          <Skeleton variant="rectangular" height={8} sx={{ borderRadius: 4 }} />
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  ))}
+                </Stack>
+              </Card>
+            </Stack>
+          </Grid>
+        </Grid>
       </Box>
     );
   }
@@ -107,41 +205,71 @@ export default function PublicProfile() {
           >
             {error}
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(-1)}
-            sx={{
-              borderRadius: '10px',
-              px: 3,
-              py: 1,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            }}
-          >
-            Go Back
-          </Button>
+          <Stack direction="row" spacing={2} justifyContent="center">
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+              sx={{
+                borderRadius: '10px',
+                px: 3,
+                py: 1,
+                color: '#64748b',
+                borderColor: '#e2e8f0',
+                textTransform: 'none',
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: 700,
+                '&:hover': {
+                  borderColor: '#cbd5e1',
+                  bgcolor: '#f8fafc',
+                },
+              }}
+            >
+              Go Back
+            </Button>
+            {!isPrivate && (
+              <Button
+                variant="contained"
+                onClick={() => window.location.reload()}
+                sx={{
+                  borderRadius: '10px',
+                  px: 3,
+                  py: 1,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  textTransform: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                  fontWeight: 700,
+                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)',
+                }}
+              >
+                Retry
+              </Button>
+            )}
+          </Stack>
         </Card>
       </Box>
     );
   }
 
-  const displayName = profileUser.full_name || profileUser.username;
+  const displayName = profileUser?.full_name || profileUser?.username || 'User';
   const displayLetter = displayName.charAt(0).toUpperCase();
-  const joinedDate = new Date(profileUser.created_at).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'long',
-  });
+  const joinedDate = profileUser?.created_at
+    ? new Date(profileUser.created_at).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+      })
+    : '';
 
-  const skillsList = profileUser.skills
+  const skillsList = profileUser?.skills
     ? profileUser.skills.split(',').map((s) => s.trim()).filter(Boolean)
     : [];
 
   const handleSendMessage = () => {
-    toast.info(`Messaging system is currently under development. You cannot message @${profileUser.username} yet!`);
+    toast.info(`Messaging system is currently under development. You cannot message @${profileUser?.username} yet!`);
   };
 
-  const enrolledCourses = profileUser.enrolled_courses || [];
-  const completedCourses = enrolledCourses.filter((c) => c.progress >= 100);
+  const enrolledCourses = profileUser?.enrolled_courses || [];
+  const completedCourses = enrolledCourses.filter((c) => c?.progress >= 100);
 
   return (
     <Box sx={{ flexGrow: 1, py: 3 }}>
@@ -175,7 +303,7 @@ export default function PublicProfile() {
             }}
           >
             <Avatar
-              src={profileUser.avatar_url || undefined}
+              src={profileUser?.avatar_url || undefined}
               sx={{
                 width: 120,
                 height: 120,
@@ -212,7 +340,7 @@ export default function PublicProfile() {
                 mb: 1.5,
               }}
             >
-              @{profileUser.username}
+              @{profileUser?.username}
             </Typography>
 
             <Stack direction="row" justifyContent="center" alignItems="center" spacing={1} sx={{ mb: 2 }}>
@@ -230,7 +358,7 @@ export default function PublicProfile() {
               />
             </Stack>
 
-            {profileUser.location && (
+            {profileUser?.location && (
               <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" sx={{ color: '#64748b', mb: 2 }}>
                 <LocationOnIcon fontSize="small" sx={{ color: '#ef4444' }} />
                 <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: "'Outfit', sans-serif" }}>
@@ -253,7 +381,7 @@ export default function PublicProfile() {
             </Typography>
 
             {/* Social Links */}
-            {profileUser.social_links && Object.values(profileUser.social_links).some(Boolean) && (
+            {profileUser?.social_links && Object.values(profileUser.social_links).some(Boolean) && (
               <Box sx={{ mb: 3 }}>
                 <Typography
                   variant="subtitle2"
@@ -376,7 +504,7 @@ export default function PublicProfile() {
                   lineHeight: 1.7,
                 }}
               >
-                {profileUser.bio || "No biography provided yet."}
+                {profileUser?.bio || "No biography provided yet."}
               </Typography>
 
               {skillsList.length > 0 && (

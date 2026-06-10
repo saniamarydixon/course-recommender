@@ -11,6 +11,7 @@ import {
   Stack,
   useTheme,
   LinearProgress,
+  Skeleton,
 } from '@mui/material';
 import BookIcon from '@mui/icons-material/Book';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -27,10 +28,14 @@ export default function Dashboard() {
     recommendations: 9,
     enrolledCourses: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const theme = useTheme();
 
   useEffect(() => {
+    const controller = new AbortController();
+
     // Read username from localStorage
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -45,21 +50,23 @@ export default function Dashboard() {
     // Fetch latest user details and actual counts
     const fetchDashboardData = async () => {
       try {
-        const meRes = await api.get('/users/me');
+        setLoading(true);
+        setError(null);
+        const meRes = await api.get('/users/me', { signal: controller.signal });
         setUsername(meRes.data.full_name || meRes.data.username || 'User');
         localStorage.setItem('user', JSON.stringify(meRes.data));
 
         // Fetch courses to get total count
-        const coursesRes = await api.get('/courses/');
+        const coursesRes = await api.get('/courses/', { signal: controller.signal });
         const totalC = coursesRes.data.length || 25;
 
         // Fetch enrolled courses
-        const enrollRes = await api.get('/users/me/enrolled-courses');
+        const enrollRes = await api.get('/users/me/enrolled-courses', { signal: controller.signal });
         const enrolledC = enrollRes.data.length || 0;
         setEnrolledCourses(enrollRes.data);
 
         // Fetch recommendations history
-        const recRes = await api.get('/recommendations/history');
+        const recRes = await api.get('/recommendations/history', { signal: controller.signal });
         const recC = recRes.data.length || 9;
 
         setStats({
@@ -68,11 +75,20 @@ export default function Dashboard() {
           enrolledCourses: enrolledC,
         });
       } catch (err) {
-        console.error("Failed to load dashboard statistics:", err);
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Failed to load dashboard statistics:", err);
+          setError(err.message || 'Failed to load dashboard statistics');
+        }
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchDashboardData();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const statsCards = [
@@ -95,6 +111,55 @@ export default function Dashboard() {
       bgColor: 'rgba(34, 197, 94, 0.08)',
     },
   ];
+
+  if (loading) {
+    return (
+      <Box sx={{ flexGrow: 1, py: 2 }}>
+        <Skeleton variant="rounded" height={160} sx={{ mb: 4, borderRadius: '16px' }} />
+        <Skeleton variant="text" width={220} height={40} sx={{ mb: 2 }} />
+        <Grid container spacing={3} sx={{ mb: 5 }}>
+          {[1, 2, 3].map(i => (
+            <Grid item xs={12} sm={4} key={i}>
+              <Skeleton variant="rounded" height={120} sx={{ borderRadius: '16px' }} />
+            </Grid>
+          ))}
+        </Grid>
+        <Skeleton variant="text" width={180} height={40} sx={{ mb: 2 }} />
+        <Grid container spacing={3}>
+          {[1, 2, 3].map(i => (
+            <Grid item xs={12} sm={4} key={i}>
+              <Skeleton variant="rounded" height={100} sx={{ borderRadius: '12px' }} />
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          😕 Failed to load dashboard
+        </Typography>
+        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          }}
+        >
+          Try Again
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ flexGrow: 1, py: 2 }}>
@@ -177,7 +242,7 @@ export default function Dashboard() {
 
       {/* Continue Learning Section */}
       {(() => {
-        const inProgressCourses = enrolledCourses.filter(item => item.progress < 100);
+        const inProgressCourses = (enrolledCourses || []).filter(item => item && item.progress < 100);
         if (inProgressCourses.length === 0) return null;
         return (
           <Box sx={{ mb: 5 }}>

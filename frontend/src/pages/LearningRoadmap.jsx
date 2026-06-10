@@ -24,6 +24,7 @@ import {
   StepLabel,
   StepContent,
   Checkbox,
+  Skeleton,
 } from '@mui/material';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import AddIcon from '@mui/icons-material/Add';
@@ -63,6 +64,7 @@ const MODAL_STYLE = {
 export default function LearningRoadmap() {
   const [roadmaps, setRoadmaps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   
   // Form State
@@ -72,20 +74,31 @@ export default function LearningRoadmap() {
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
 
-  const fetchRoadmaps = async () => {
+  const fetchRoadmaps = async (signal) => {
     try {
-      const response = await api.get('/roadmap/my-roadmaps');
+      setLoading(true);
+      setError(null);
+      const response = await api.get('/roadmap/my-roadmaps', { signal });
       setRoadmaps(response.data);
     } catch (err) {
-      console.error("Error fetching roadmaps:", err);
-      toast.error("Failed to load learning paths");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error fetching roadmaps:", err);
+        setError(err.message || "Failed to load learning paths");
+        toast.error("Failed to load learning paths");
+      }
     } finally {
-      setLoading(false);
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchRoadmaps();
+    const controller = new AbortController();
+    fetchRoadmaps(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const handleOpenModal = () => {

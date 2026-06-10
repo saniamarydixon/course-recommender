@@ -6,6 +6,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Layout and Pages
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -93,38 +94,40 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+      <ErrorBoundary>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* Protected Authenticated Routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<RootRedirect />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="courses" element={<Courses />} />
-          <Route path="courses/:id" element={<CourseDetail />} />
-          <Route path="recommendations" element={<Recommendations />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="learning-paths" element={<LearningRoadmap />} />
-          <Route path="wishlist" element={<Wishlist />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="users/:username" element={<PublicProfile />} />
-          
-          {/* Fallback inside Layout */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
+          {/* Protected Authenticated Routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<RootRedirect />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="courses" element={<Courses />} />
+            <Route path="courses/:id" element={<CourseDetail />} />
+            <Route path="recommendations" element={<Recommendations />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="learning-paths" element={<LearningRoadmap />} />
+            <Route path="wishlist" element={<Wishlist />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="users/:username" element={<PublicProfile />} />
+            
+            {/* Fallback inside Layout */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
 
-        {/* Global Fallback */}
-        <Route path="*" element={<RootRedirect />} />
-      </Routes>
+          {/* Global Fallback */}
+          <Route path="*" element={<RootRedirect />} />
+        </Routes>
+      </ErrorBoundary>
 
       <ToastContainer
         position="top-right"

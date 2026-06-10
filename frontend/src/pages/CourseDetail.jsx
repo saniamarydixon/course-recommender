@@ -17,6 +17,7 @@ import {
   Slider,
   Avatar,
   TextField,
+  Skeleton,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -38,6 +39,7 @@ export default function CourseDetail() {
   const [enrolled, setEnrolled] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
   const [certOpen, setCertOpen] = useState(false);
 
@@ -61,12 +63,16 @@ export default function CourseDetail() {
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error(e);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (reviews.length > 0 && currentUser) {
+    if (reviews && reviews.length > 0 && currentUser) {
       const myReview = reviews.find(r => r.user_id === currentUser.id);
       setUserReview(myReview || null);
     } else {
@@ -75,30 +81,41 @@ export default function CourseDetail() {
   }, [reviews, currentUser]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchData = async () => {
       try {
-        const courseRes = await api.get(`/courses/${id}`);
+        setLoading(true);
+        setError(null);
+        const courseRes = await api.get(`/courses/${id}`, { signal: controller.signal });
         setCourse(courseRes.data);
 
         // Fetch enrollment status and progress
-        const statusRes = await api.get(`/courses/${id}/enrollment-status`);
+        const statusRes = await api.get(`/courses/${id}/enrollment-status`, { signal: controller.signal });
         setEnrolled(statusRes.data.is_enrolled);
         setProgress(statusRes.data.progress || 0);
 
         // Fetch reviews
-        const reviewsRes = await api.get(`/courses/${id}/reviews`);
+        const reviewsRes = await api.get(`/courses/${id}/reviews`, { signal: controller.signal });
         setReviews(reviewsRes.data);
       } catch (err) {
-        console.error("Error loading course details:", err);
-        toast.error("Failed to load course details");
-        navigate('/courses');
+        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+          console.error("Error loading course details:", err);
+          setError(err.message || "Failed to load course details");
+          toast.error("Failed to load course details");
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, [id, navigate]);
+    return () => {
+      controller.abort();
+    };
+  }, [id]);
+
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
@@ -230,13 +247,80 @@ export default function CourseDetail() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, py: 8 }}>
-        <CircularProgress color="primary" />
+      <Box sx={{ flexGrow: 1, py: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 3 }} disabled>
+          Back
+        </Button>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={8}>
+            <Skeleton variant="rounded" height={360} sx={{ borderRadius: '16px', mb: 3 }} />
+            <Skeleton variant="text" height={40} width="60%" sx={{ mb: 2 }} />
+            <Skeleton variant="text" height={24} width="100%" sx={{ mb: 1 }} />
+            <Skeleton variant="text" height={24} width="90%" sx={{ mb: 1 }} />
+            <Skeleton variant="text" height={24} width="40%" sx={{ mb: 4 }} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ p: 3, borderRadius: '16px' }}>
+              <Skeleton variant="text" height={32} width="80%" sx={{ mb: 2 }} />
+              <Skeleton variant="rounded" height={100} sx={{ mb: 2 }} />
+              <Skeleton variant="rounded" height={48} />
+            </Card>
+          </Grid>
+        </Grid>
       </Box>
     );
   }
 
-  if (!course) return null;
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          😕 Failed to load course details
+        </Typography>
+        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+          {error}
+        </Typography>
+        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+          <Button 
+            variant="outlined" 
+            onClick={() => navigate('/courses')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            Back to Courses
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={() => window.location.reload()}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontFamily: "'Outfit', sans-serif",
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            }}
+          >
+            Retry
+          </Button>
+        </Stack>
+      </Box>
+    );
+  }
+
+  if (!course) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          🔍 Course not found
+        </Typography>
+        <Button variant="contained" onClick={() => navigate('/courses')} sx={{ mt: 2 }}>
+          Back to Courses
+        </Button>
+      </Box>
+    );
+  }
 
   const thumbnail = course.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800';
   const priceText = course.price === 0 || !course.price ? 'FREE' : `$${course.price.toFixed(2)}`;
@@ -490,7 +574,7 @@ export default function CourseDetail() {
               </Typography>
             ) : (
               <Stack spacing={3}>
-                {reviews.map((rev) => {
+                {(reviews || []).map((rev) => {
                   const isOwnReview = currentUser && rev.user_id === currentUser.id;
                   const isEditing = editingReviewId === rev.id;
                   const reviewUser = rev.user || {};

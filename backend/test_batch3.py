@@ -121,7 +121,7 @@ def run_tests():
 
     # Set progress to 50%
     progress_res = httpx.put(f"{BASE_URL}/courses/{course_id}/progress", json={"progress": 50}, headers=headers_a)
-    assert progress_res.status_code == 200
+    assert progress_res.status_code == 200, f"Failed updating progress: {progress_res.status_code} {progress_res.text}"
     print("Progress updated to 50%.")
 
     # C. Attempt certificate download at 50% progress (Should fail 400)

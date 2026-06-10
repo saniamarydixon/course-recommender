@@ -14,6 +14,7 @@ import {
   Button,
   IconButton,
   Stack,
+  Skeleton,
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
@@ -25,22 +26,34 @@ import api from '../services/api';
 export default function Wishlist() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const fetchWishlist = async () => {
+  const fetchWishlist = async (signal) => {
     try {
-      const res = await api.get('/users/me/wishlist');
+      setLoading(true);
+      setError(null);
+      const res = await api.get('/users/me/wishlist', { signal });
       setCourses(res.data);
     } catch (err) {
-      console.error('Failed to fetch wishlist courses:', err);
-      toast.error('Failed to load wishlist');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Failed to fetch wishlist courses:', err);
+        setError(err.message || 'Failed to load wishlist');
+        toast.error('Failed to load wishlist');
+      }
     } finally {
-      setLoading(false);
+      if (!signal || !signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchWishlist();
+    const controller = new AbortController();
+    fetchWishlist(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const handleRemoveFromWishlist = async (e, courseId) => {
@@ -49,7 +62,7 @@ export default function Wishlist() {
     try {
       await api.delete(`/courses/${courseId}/wishlist`);
       // Update local state
-      setCourses(courses.filter((course) => course.id !== courseId));
+      setCourses((courses || []).filter((course) => course.id !== courseId));
       toast.success('Removed from wishlist');
       
       // Dispatch custom event to notify Sidebar count update
@@ -62,8 +75,57 @@ export default function Wishlist() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, py: 8 }}>
-        <CircularProgress color="primary" />
+      <Box sx={{ flexGrow: 1, py: 2 }}>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 800,
+            color: '#1e293b',
+            fontFamily: "'Outfit', sans-serif",
+            mb: 4,
+          }}
+        >
+          ❤️ My Wishlist
+        </Typography>
+        <Grid container spacing={4}>
+          {[1, 2, 3].map(i => (
+            <Grid item xs={12} sm={6} md={4} key={i}>
+              <Card sx={{ borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <Skeleton variant="rounded" height={160} />
+                <CardContent sx={{ p: 3 }}>
+                  <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
+                  <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
+                  <Skeleton variant="rounded" height={36} />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
+          😕 Failed to load wishlist
+        </Typography>
+        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          }}
+        >
+          Try Again
+        </Button>
       </Box>
     );
   }
