@@ -14,9 +14,9 @@ import {
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import TimelineIcon from '@mui/icons-material/Timeline';
 import PersonIcon from '@mui/icons-material/Person';
 import FavoriteIcon from '@mui/icons-material/Favorite';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import api from '../../services/api';
 
 const DRAWER_WIDTH = 260;
@@ -25,8 +25,8 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Courses', icon: <LibraryBooksIcon />, path: '/courses' },
   { text: 'AI Recommendations', icon: <AutoAwesomeIcon />, path: '/recommendations' },
-  { text: 'Learning Paths', icon: <TimelineIcon />, path: '/learning-paths' },
   { text: 'Wishlist', icon: <FavoriteIcon />, path: '/wishlist' },
+  { text: 'Learning Paths', icon: <TimelineIcon />, path: '/learning-paths' },
   { text: 'My Profile', icon: <PersonIcon />, path: '/profile' },
 ];
 
@@ -37,12 +37,13 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
 
   const fetchWishlistCount = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || localStorage.getItem('access_token');
       if (!token) return;
       const res = await api.get('/users/me/wishlist');
-      setWishlistCount(res.data.length);
+      setWishlistCount(res.data?.length || 0);
     } catch (err) {
       console.error("Failed to fetch wishlist count:", err);
+      setWishlistCount(0);
     }
   };
 
@@ -159,7 +160,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
         open={mobileOpen}
         onClose={handleDrawerToggle}
         ModalProps={{
-          keepMounted: true, // Better open performance on mobile.
+          keepMounted: true,
         }}
         sx={{
           display: { xs: 'block', md: 'none' },

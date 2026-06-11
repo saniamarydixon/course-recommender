@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -11,16 +11,9 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Badge,
-  Popover,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import Sidebar from './Sidebar';
 import api from '../../services/api';
 import ChatButton from '../Chatbot/ChatButton';
@@ -31,69 +24,11 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [notifAnchor, setNotifAnchor] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await api.get('/notifications/unread-count');
-      setUnreadCount(res.data.unread_count);
-    } catch (err) {
-      console.error("Failed to fetch unread notifications count:", err);
-    }
-  };
-
-  const fetchRecentNotifications = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await api.get('/notifications/?limit=5');
-      setNotifications(res.data);
-    } catch (err) {
-      console.error("Failed to fetch recent notifications:", err);
-    }
-  };
-
-  const handleNotifOpen = (event) => {
-    setNotifAnchor(event.currentTarget);
-    fetchRecentNotifications();
-  };
-
-  const handleNotifClose = () => {
-    setNotifAnchor(null);
-  };
-
-  const handleNotificationClick = async (notif) => {
-    handleNotifClose();
-    if (!notif.is_read) {
-      try {
-        await api.put(`/notifications/${notif.id}/read`);
-        fetchUnreadCount();
-      } catch (err) {
-        console.error("Failed to mark notification as read:", err);
-      }
-    }
-    if (notif.link) {
-      navigate(notif.link);
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    try {
-      await api.put('/notifications/read-all');
-      fetchUnreadCount();
-      fetchRecentNotifications();
-    } catch (err) {
-      console.error("Failed to mark all notifications as read:", err);
-    }
   };
 
   useEffect(() => {
@@ -116,14 +51,11 @@ export default function Layout() {
       .catch(err => {
         console.error("Failed to fetch current user profile:", err);
       });
-
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 15000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     navigate('/login');
   };
@@ -169,157 +101,26 @@ export default function Layout() {
             <MenuIcon />
           </IconButton>
 
-          {/* Page Title or Breadcrumb (optional, can be empty or just generic) */}
           <Typography
             variant="h6"
             noWrap
             component="div"
             sx={{
-              fontWeight: 700,
+              fontWeight: 800,
               fontFamily: "'Outfit', sans-serif",
               fontSize: '1.25rem',
               display: { xs: 'none', sm: 'block' },
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
             }}
           >
-            Learning Platform
+            CourseRec AI
           </Typography>
           <Box sx={{ display: { xs: 'block', sm: 'none' } }} />
 
           {/* User profile dropdown and Logout */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {/* Notification Bell */}
-            <IconButton
-              color="inherit"
-              onClick={handleNotifOpen}
-              sx={{
-                color: '#64748b',
-                '&:hover': {
-                  color: '#667eea',
-                  backgroundColor: 'rgba(102, 126, 234, 0.08)',
-                },
-              }}
-            >
-              <Badge badgeContent={unreadCount} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-
-            {/* Notifications Popover */}
-            <Popover
-              open={Boolean(notifAnchor)}
-              anchorEl={notifAnchor}
-              onClose={handleNotifClose}
-              anchorOrigin={{
-                vertical: 'bottom',
-                horizontal: 'right',
-              }}
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              PaperProps={{
-                sx: {
-                  mt: 1.5,
-                  width: 320,
-                  maxWidth: '100%',
-                  borderRadius: '16px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #f1f5f9',
-                },
-              }}
-            >
-              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>
-                  Notifications
-                </Typography>
-                {unreadCount > 0 && (
-                  <Button
-                    size="small"
-                    onClick={handleMarkAllRead}
-                    sx={{ textTransform: 'none', fontSize: '0.75rem', fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    Mark all read
-                  </Button>
-                )}
-              </Box>
-              <Divider />
-              <List sx={{ p: 0, maxHeight: 300, overflowY: 'auto' }}>
-                {notifications.length === 0 ? (
-                  <ListItem sx={{ py: 3, justifyContent: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#94a3b8', textAlign: 'center', fontFamily: "'Outfit', sans-serif" }}>
-                      No notifications yet
-                    </Typography>
-                  </ListItem>
-                ) : (
-                  notifications.map((notif) => (
-                    <Box key={notif.id}>
-                      <ListItem
-                        onClick={() => handleNotificationClick(notif)}
-                        sx={{
-                          py: 1.5,
-                          px: 2,
-                          backgroundColor: notif.is_read ? 'transparent' : 'rgba(102, 126, 234, 0.04)',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                          },
-                          display: 'block'
-                        }}
-                      >
-                        <ListItemText
-                          primary={
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontWeight: notif.is_read ? 500 : 700,
-                                color: '#1e293b',
-                                fontFamily: "'Outfit', sans-serif",
-                                fontSize: '0.875rem',
-                              }}
-                            >
-                              {notif.title}
-                            </Typography>
-                          }
-                          secondary={
-                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: '#64748b',
-                                  fontFamily: "'Outfit', sans-serif",
-                                  lineHeight: 1.3,
-                                  display: 'block'
-                                }}
-                              >
-                                {notif.message}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', display: 'block' }}>
-                                {new Date(notif.created_at).toLocaleDateString()}
-                              </Typography>
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                      <Divider />
-                    </Box>
-                  ))
-                )}
-              </List>
-              <Box sx={{ p: 1.5, textAlign: 'center' }}>
-                <Button
-                  fullWidth
-                  size="small"
-                  onClick={() => {
-                    handleNotifClose();
-                    navigate('/notifications');
-                  }}
-                  sx={{ textTransform: 'none', fontWeight: 700, fontFamily: "'Outfit', sans-serif", fontSize: '0.8rem' }}
-                >
-                  View All Notifications
-                </Button>
-              </Box>
-            </Popover>
-
             <Box
               onClick={handleMenuOpen}
               sx={{
@@ -337,6 +138,7 @@ export default function Layout() {
               }}
             >
               <Avatar
+                src={user?.avatar_url || undefined}
                 sx={{
                   width: 36,
                   height: 36,
@@ -429,7 +231,7 @@ export default function Layout() {
           mt: '64px',
         }}
       >
-        <Outlet />
+        <Outlet key={location.pathname} />
       </Box>
 
       {/* Floating AI Chatbot Assistant */}

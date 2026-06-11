@@ -19,6 +19,8 @@ import {
   CardMedia,
   IconButton,
   Skeleton,
+  Container,
+  Alert
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -84,7 +86,7 @@ export default function Recommendations() {
     );
   };
 
-  const fetchRecommendations = async (signal) => {
+  const fetchRecommendations = async (mountedRef) => {
     setLoading(true);
     setError(null);
     try {
@@ -101,37 +103,39 @@ export default function Recommendations() {
         algoParam = 'content';
       }
 
-      const response = await api.post(`/recommendations/generate?algorithm=${algoParam}`, payload, { signal });
-      setRecommendations(response.data);
+      const response = await api.post(`/recommendations/generate?algorithm=${algoParam}`, payload);
+      if (mountedRef.current) {
+        setRecommendations(response.data || []);
+      }
     } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+      if (mountedRef.current) {
         console.error(err);
-        setError(err.message || 'Failed to generate recommendations');
+        setError(err.response?.data?.detail || err.message || 'Failed to generate recommendations');
       }
     } finally {
-      if (!signal || !signal.aborted) {
+      if (mountedRef.current) {
         setLoading(false);
       }
     }
   };
 
-  const fetchWishlist = async (signal) => {
+  const fetchWishlist = async (mountedRef) => {
     try {
-      const res = await api.get('/users/me/wishlist', { signal });
-      setWishlistIds((res.data || []).map(c => c.id));
-    } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-        console.error("Failed to fetch wishlist:", err);
+      const res = await api.get('/users/me/wishlist');
+      if (mountedRef.current) {
+        setWishlistIds((res.data || []).map(c => c.id));
       }
+    } catch (err) {
+      console.error("Failed to fetch wishlist:", err);
     }
   };
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchRecommendations(controller.signal);
-    fetchWishlist(controller.signal);
+    const mountedRef = { current: true };
+    fetchRecommendations(mountedRef);
+    fetchWishlist(mountedRef);
     return () => {
-      controller.abort();
+      mountedRef.current = false;
     };
   }, []);
 
@@ -162,6 +166,38 @@ export default function Recommendations() {
       setGenerating(false);
     }
   };
+  // ALWAYS show loading exactly as requested
+  if (loading) {
+    return (
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
+    );
+  }
+
+  // ALWAYS show error exactly as requested
+  if (error) {
+    return (
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
     <Box sx={{ flexGrow: 1, py: 2 }}>
@@ -286,44 +322,7 @@ export default function Recommendations() {
       </Card>
 
       {/* Main Recommended Content */}
-      {loading ? (
-        <Grid container spacing={4}>
-          {[1, 2, 3].map(i => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
-              <Card sx={{ borderRadius: '16px', border: '1px solid #f1f5f9' }}>
-                <Skeleton variant="rounded" height={180} />
-                <CardContent sx={{ p: 3 }}>
-                  <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
-                  <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
-                  <Skeleton variant="rounded" height={36} />
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      ) : error ? (
-        <Box sx={{ p: 4, textAlign: 'center', mt: 4, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-          <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>
-            😕 Failed to load recommendations
-          </Typography>
-          <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
-            {error}
-          </Typography>
-          <Button 
-            variant="contained" 
-            onClick={() => window.location.reload()}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              fontFamily: "'Outfit', sans-serif",
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-            }}
-          >
-            Retry
-          </Button>
-        </Box>
-      ) : (
-        <Box>
+      <Box>
           {/* Header Title with Counts */}
           <Typography
             variant="h5"
@@ -557,8 +556,7 @@ export default function Recommendations() {
               })}
             </Grid>
           )}
-        </Box>
-      )}
+      </Box>
     </Box>
   );
 }

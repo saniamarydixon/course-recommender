@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Container,
   Box,
   Typography,
   Grid,
@@ -9,9 +10,9 @@ import {
   Button,
   Avatar,
   Stack,
-  useTheme,
   LinearProgress,
-  Skeleton,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import BookIcon from '@mui/icons-material/Book';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -24,19 +25,18 @@ export default function Dashboard() {
   const [username, setUsername] = useState('User');
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [stats, setStats] = useState({
-    totalCourses: 25,
+    totalCourses: 26,
     recommendations: 9,
     enrolledCourses: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const theme = useTheme();
 
   useEffect(() => {
-    const controller = new AbortController();
+    let mounted = true;
 
-    // Read username from localStorage
+    // Read username from localStorage immediately
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
@@ -47,49 +47,91 @@ export default function Dashboard() {
       }
     }
 
-    // Fetch latest user details and actual counts
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const meRes = await api.get('/users/me', { signal: controller.signal });
-        setUsername(meRes.data.full_name || meRes.data.username || 'User');
-        localStorage.setItem('user', JSON.stringify(meRes.data));
+        
+        const meRes = await api.get('/users/me');
+        if (mounted) {
+          setUsername(meRes.data.full_name || meRes.data.username || 'User');
+          localStorage.setItem('user', JSON.stringify(meRes.data));
+        }
 
         // Fetch courses to get total count
-        const coursesRes = await api.get('/courses/', { signal: controller.signal });
-        const totalC = coursesRes.data.length || 25;
+        const coursesRes = await api.get('/courses/');
+        const totalC = coursesRes.data?.length || 26;
 
         // Fetch enrolled courses
-        const enrollRes = await api.get('/users/me/enrolled-courses', { signal: controller.signal });
-        const enrolledC = enrollRes.data.length || 0;
-        setEnrolledCourses(enrollRes.data);
+        const enrollRes = await api.get('/users/me/enrolled-courses');
+        const enrolledC = enrollRes.data?.length || 0;
+        
+        if (mounted) {
+          setEnrolledCourses(enrollRes.data || []);
+        }
 
         // Fetch recommendations history
-        const recRes = await api.get('/recommendations/history', { signal: controller.signal });
-        const recC = recRes.data.length || 9;
+        const recRes = await api.get('/recommendations/history');
+        const recC = recRes.data?.length || 9;
 
-        setStats({
-          totalCourses: totalC,
-          recommendations: recC,
-          enrolledCourses: enrolledC,
-        });
+        if (mounted) {
+          setStats({
+            totalCourses: totalC,
+            recommendations: recC,
+            enrolledCourses: enrolledC,
+          });
+        }
       } catch (err) {
-        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        if (mounted) {
           console.error("Failed to load dashboard statistics:", err);
-          setError(err.message || 'Failed to load dashboard statistics');
+          setError(err.response?.data?.detail || err.message || 'Failed to load dashboard statistics');
         }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchDashboardData();
 
     return () => {
-      controller.abort();
+      mounted = false;
     };
   }, []);
+
+  // ALWAYS show loading exactly as requested
+  if (loading) {
+    return (
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
+    );
+  }
+
+  // ALWAYS show error exactly as requested
+  if (error) {
+    return (
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Container>
+    );
+  }
 
   const statsCards = [
     {
@@ -112,57 +154,10 @@ export default function Dashboard() {
     },
   ];
 
-  if (loading) {
-    return (
-      <Box sx={{ flexGrow: 1, py: 2 }}>
-        <Skeleton variant="rounded" height={160} sx={{ mb: 4, borderRadius: '16px' }} />
-        <Skeleton variant="text" width={220} height={40} sx={{ mb: 2 }} />
-        <Grid container spacing={3} sx={{ mb: 5 }}>
-          {[1, 2, 3].map(i => (
-            <Grid item xs={12} sm={4} key={i}>
-              <Skeleton variant="rounded" height={120} sx={{ borderRadius: '16px' }} />
-            </Grid>
-          ))}
-        </Grid>
-        <Skeleton variant="text" width={180} height={40} sx={{ mb: 2 }} />
-        <Grid container spacing={3}>
-          {[1, 2, 3].map(i => (
-            <Grid item xs={12} sm={4} key={i}>
-              <Skeleton variant="rounded" height={100} sx={{ borderRadius: '12px' }} />
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
-        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
-          😕 Failed to load dashboard
-        </Typography>
-        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
-          {error}
-        </Typography>
-        <Button 
-          variant="contained" 
-          onClick={() => window.location.reload()}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            fontFamily: "'Outfit', sans-serif",
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-          }}
-        >
-          Try Again
-        </Button>
-      </Box>
-    );
-  }
+  const inProgressCourses = (enrolledCourses || []).filter(item => item && item.progress < 100);
 
   return (
-    <Box sx={{ flexGrow: 1, py: 2 }}>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Welcome Banner */}
       <Card
         sx={{
@@ -241,119 +236,115 @@ export default function Dashboard() {
       </Grid>
 
       {/* Continue Learning Section */}
-      {(() => {
-        const inProgressCourses = (enrolledCourses || []).filter(item => item && item.progress < 100);
-        if (inProgressCourses.length === 0) return null;
-        return (
-          <Box sx={{ mb: 5 }}>
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: 800,
-                color: '#1e293b',
-                fontFamily: "'Outfit', sans-serif",
-                mb: 3,
-              }}
-            >
-              🏃 Continue Learning
-            </Typography>
-            <Grid container spacing={3}>
-              {inProgressCourses.map((item) => {
-                const c = item.course;
-                if (!c) return null;
-                const thumbnail = c.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
-                return (
-                  <Grid item xs={12} sm={6} md={4} key={c.id}>
-                    <Card
-                      sx={{
-                        borderRadius: '16px',
-                        border: '1px solid #f1f5f9',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                        transition: 'transform 0.2s, box-shadow 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-4px)',
-                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                        },
-                      }}
-                    >
-                      <Box sx={{ height: 140, overflow: 'hidden', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
-                        <img
-                          src={thumbnail}
-                          alt={c.title}
-                          style={{ height: '100%', width: '100%', objectFit: 'cover' }}
-                        />
-                      </Box>
-                      <CardContent sx={{ p: 3 }}>
-                        <Typography
-                          variant="subtitle1"
-                          sx={{
-                            fontWeight: 800,
-                            color: '#1e293b',
-                            fontFamily: "'Outfit', sans-serif",
-                            lineHeight: 1.3,
-                            mb: 1.5,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            height: '2.6rem',
-                          }}
-                        >
-                          {c.title}
-                        </Typography>
+      {inProgressCourses.length > 0 && (
+        <Box sx={{ mb: 5 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+              color: '#1e293b',
+              fontFamily: "'Outfit', sans-serif",
+              mb: 3,
+            }}
+          >
+            🏃 Continue Learning
+          </Typography>
+          <Grid container spacing={3}>
+            {inProgressCourses.map((item) => {
+              const c = item.course;
+              if (!c) return null;
+              const thumbnail = c.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
+              return (
+                <Grid item xs={12} sm={6} md={4} key={c.id}>
+                  <Card
+                    sx={{
+                      borderRadius: '16px',
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      },
+                    }}
+                  >
+                    <Box sx={{ height: 140, overflow: 'hidden', borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                      <img
+                        src={thumbnail}
+                        alt={c.title}
+                        style={{ height: '100%', width: '100%', objectFit: 'cover' }}
+                      />
+                    </Box>
+                    <CardContent sx={{ p: 3 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 800,
+                          color: '#1e293b',
+                          fontFamily: "'Outfit', sans-serif",
+                          lineHeight: 1.3,
+                          mb: 1.5,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          height: '2.6rem',
+                        }}
+                      >
+                        {c.title}
+                      </Typography>
 
-                        <Box sx={{ mb: 2 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
-                              Progress
-                            </Typography>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: '#667eea', fontFamily: "'Outfit', sans-serif" }}>
-                              {item.progress}%
-                            </Typography>
-                          </Box>
-                          <LinearProgress
-                            variant="determinate"
-                            value={item.progress}
-                            sx={{
-                              height: 6,
-                              borderRadius: 3,
-                              backgroundColor: '#e2e8f0',
-                              '& .MuiLinearProgress-bar': {
-                                borderRadius: 3,
-                                backgroundColor: '#667eea',
-                              },
-                            }}
-                          />
+                      <Box sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
+                            Progress
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#667eea', fontFamily: "'Outfit', sans-serif" }}>
+                            {item.progress}%
+                          </Typography>
                         </Box>
-
-                        <Button
-                          fullWidth
-                          variant="contained"
-                          onClick={() => navigate(`/courses/${c.id}`)}
+                        <LinearProgress
+                          variant="determinate"
+                          value={item.progress}
                           sx={{
-                            py: 1,
-                            borderRadius: '8px',
-                            textTransform: 'none',
-                            fontWeight: 700,
-                            fontFamily: "'Outfit', sans-serif",
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            boxShadow: '0 2px 4px rgba(102, 126, 234, 0.2)',
-                            '&:hover': {
-                              background: 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: '#e2e8f0',
+                            '& .MuiLinearProgress-bar': {
+                              borderRadius: 3,
+                              backgroundColor: '#667eea',
                             },
                           }}
-                        >
-                          Resume Learning
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        );
-      })()}
+                        />
+                      </Box>
+
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        onClick={() => navigate(`/courses/${c.id}`)}
+                        sx={{
+                          py: 1,
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 700,
+                          fontFamily: "'Outfit', sans-serif",
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          boxShadow: '0 2px 4px rgba(102, 126, 234, 0.2)',
+                          '&:hover': {
+                            background: 'linear-gradient(135deg, #5a6fd6 0%, #683fa3 100%)',
+                          },
+                        }}
+                      >
+                        Resume Learning
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Box>
+      )}
 
       {/* Quick Actions */}
       <Typography
@@ -445,6 +436,6 @@ export default function Dashboard() {
           </Button>
         </Grid>
       </Grid>
-    </Box>
+    </Container>
   );
 }

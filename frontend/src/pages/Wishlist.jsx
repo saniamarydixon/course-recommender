@@ -15,6 +15,8 @@ import {
   IconButton,
   Stack,
   Skeleton,
+  Container,
+  Alert
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
@@ -29,30 +31,31 @@ export default function Wishlist() {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const fetchWishlist = async (signal) => {
+  const fetchWishlist = async (mountedRef) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/users/me/wishlist', { signal });
-      setCourses(res.data);
+      const res = await api.get('/users/me/wishlist');
+      if (mountedRef.current) {
+        setCourses(res.data || []);
+      }
     } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+      if (mountedRef.current) {
         console.error('Failed to fetch wishlist courses:', err);
-        setError(err.message || 'Failed to load wishlist');
-        toast.error('Failed to load wishlist');
+        setError(err.response?.data?.detail || err.message || 'Failed to load wishlist');
       }
     } finally {
-      if (!signal || !signal.aborted) {
+      if (mountedRef.current) {
         setLoading(false);
       }
     }
   };
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchWishlist(controller.signal);
+    const mountedRef = { current: true };
+    fetchWishlist(mountedRef);
     return () => {
-      controller.abort();
+      mountedRef.current = false;
     };
   }, []);
 
@@ -73,60 +76,36 @@ export default function Wishlist() {
     }
   };
 
+  // ALWAYS show loading exactly as requested
   if (loading) {
     return (
-      <Box sx={{ flexGrow: 1, py: 2 }}>
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight: 800,
-            color: '#1e293b',
-            fontFamily: "'Outfit', sans-serif",
-            mb: 4,
-          }}
-        >
-          ❤️ My Wishlist
-        </Typography>
-        <Grid container spacing={4}>
-          {[1, 2, 3].map(i => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
-              <Card sx={{ borderRadius: '16px', border: '1px solid #f1f5f9' }}>
-                <Skeleton variant="rounded" height={160} />
-                <CardContent sx={{ p: 3 }}>
-                  <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
-                  <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
-                  <Skeleton variant="rounded" height={36} />
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
     );
   }
 
+  // ALWAYS show error exactly as requested
   if (error) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
-        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
-          😕 Failed to load wishlist
-        </Typography>
-        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
-          {error}
-        </Typography>
-        <Button 
-          variant="contained" 
-          onClick={() => window.location.reload()}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            fontFamily: "'Outfit', sans-serif",
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-          }}
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
         >
-          Try Again
-        </Button>
-      </Box>
+          {error}
+        </Alert>
+      </Container>
     );
   }
 

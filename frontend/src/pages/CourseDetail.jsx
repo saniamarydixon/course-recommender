@@ -18,6 +18,8 @@ import {
   Avatar,
   TextField,
   Skeleton,
+  Container,
+  Alert
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -28,8 +30,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StarIcon from '@mui/icons-material/Star';
 import { toast } from 'react-toastify';
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import CertificateModal from '../components/Certificate/CertificateModal';
 import api from '../services/api';
 
 export default function CourseDetail() {
@@ -41,13 +41,6 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
-  const [certOpen, setCertOpen] = useState(false);
-
-  const handleCopyShareableLink = () => {
-    const courseUrl = `${window.location.origin}/courses/${id}`;
-    navigator.clipboard.writeText(courseUrl);
-    toast.success("Shareable course completion link copied to clipboard!");
-  };
 
   // Reviews and current user states
   const [reviews, setReviews] = useState([]);
@@ -81,30 +74,35 @@ export default function CourseDetail() {
   }, [reviews, currentUser]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let mounted = true;
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const courseRes = await api.get(`/courses/${id}`, { signal: controller.signal });
-        setCourse(courseRes.data);
+        const courseRes = await api.get(`/courses/${id}`);
+        if (mounted) {
+          setCourse(courseRes.data);
+        }
 
         // Fetch enrollment status and progress
-        const statusRes = await api.get(`/courses/${id}/enrollment-status`, { signal: controller.signal });
-        setEnrolled(statusRes.data.is_enrolled);
-        setProgress(statusRes.data.progress || 0);
+        const statusRes = await api.get(`/courses/${id}/enrollment-status`);
+        if (mounted) {
+          setEnrolled(statusRes.data.is_enrolled);
+          setProgress(statusRes.data.progress || 0);
+        }
 
         // Fetch reviews
-        const reviewsRes = await api.get(`/courses/${id}/reviews`, { signal: controller.signal });
-        setReviews(reviewsRes.data);
+        const reviewsRes = await api.get(`/courses/${id}/reviews`);
+        if (mounted) {
+          setReviews(reviewsRes.data || []);
+        }
       } catch (err) {
-        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        if (mounted) {
           console.error("Error loading course details:", err);
-          setError(err.message || "Failed to load course details");
-          toast.error("Failed to load course details");
+          setError(err.response?.data?.detail || err.message || "Failed to load course details");
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (mounted) {
           setLoading(false);
         }
       }
@@ -112,35 +110,43 @@ export default function CourseDetail() {
 
     fetchData();
     return () => {
-      controller.abort();
+      mounted = false;
     };
   }, [id]);
 
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
-    if (ratingInput < 1 || ratingInput > 5) {
-      toast.error("Rating must be between 1 and 5 stars");
+    
+    if (!ratingInput || !commentInput.trim()) {
+      toast.error('Please provide rating and comment');
       return;
     }
+    
     setSubmittingReview(true);
     try {
-      await api.post(`/courses/${id}/reviews`, {
-        rating: ratingInput,
-        comment: commentInput
-      });
-      toast.success("Review submitted successfully!");
-      setCommentInput('');
-      setRatingInput(5);
+      const response = await api.post(
+        `/courses/${id}/reviews`,
+        { rating: ratingInput, comment: commentInput }
+      );
       
-      // Refresh reviews and course data (to update avg rating)
-      const reviewsRes = await api.get(`/courses/${id}/reviews`);
-      setReviews(reviewsRes.data);
+      // CRITICAL: Update local state immediately
+      // Don't reload the page
+      setReviews(prevReviews => [response.data, ...(prevReviews || [])]);
+      
+      // Clear the form
+      setRatingInput(5);
+      setCommentInput('');
+      
+      // Show success message
+      toast.success('Review submitted successfully!');
+      
+      // Fetch course updates in the background (updates overall rating/reviews count)
       const courseRes = await api.get(`/courses/${id}`);
       setCourse(courseRes.data);
     } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.detail || "Failed to submit review");
+      console.error('Review submission error:', err);
+      toast.error(err.response?.data?.detail || 'Failed to submit review');
     } finally {
       setSubmittingReview(false);
     }
@@ -245,80 +251,49 @@ export default function CourseDetail() {
     }
   };
 
+  // ALWAYS show loading exactly as requested
   if (loading) {
     return (
-      <Box sx={{ flexGrow: 1, py: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 3 }} disabled>
-          Back
-        </Button>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={8}>
-            <Skeleton variant="rounded" height={360} sx={{ borderRadius: '16px', mb: 3 }} />
-            <Skeleton variant="text" height={40} width="60%" sx={{ mb: 2 }} />
-            <Skeleton variant="text" height={24} width="100%" sx={{ mb: 1 }} />
-            <Skeleton variant="text" height={24} width="90%" sx={{ mb: 1 }} />
-            <Skeleton variant="text" height={24} width="40%" sx={{ mb: 4 }} />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ p: 3, borderRadius: '16px' }}>
-              <Skeleton variant="text" height={32} width="80%" sx={{ mb: 2 }} />
-              <Skeleton variant="rounded" height={100} sx={{ mb: 2 }} />
-              <Skeleton variant="rounded" height={48} />
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
     );
   }
 
+  // ALWAYS show error exactly as requested
   if (error) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
-        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
-          😕 Failed to load course details
-        </Typography>
-        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
+        >
           {error}
-        </Typography>
-        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
-          <Button 
-            variant="outlined" 
-            onClick={() => navigate('/courses')}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              fontFamily: "'Outfit', sans-serif",
-            }}
-          >
-            Back to Courses
-          </Button>
-          <Button 
-            variant="contained" 
-            onClick={() => window.location.reload()}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              fontFamily: "'Outfit', sans-serif",
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-            }}
-          >
-            Retry
-          </Button>
-        </Stack>
-      </Box>
+        </Alert>
+      </Container>
     );
   }
 
   if (!course) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
+      <Container sx={{ py: 8, textAlign: 'center' }}>
         <Typography variant="h5" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
           🔍 Course not found
         </Typography>
         <Button variant="contained" onClick={() => navigate('/courses')} sx={{ mt: 2 }}>
           Back to Courses
         </Button>
-      </Box>
+      </Container>
     );
   }
 
@@ -842,52 +817,6 @@ export default function CourseDetail() {
                   </Typography>
                 </Box>
 
-                {progress >= 100 && course.has_certificate && (
-                  <Stack spacing={1}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      startIcon={<WorkspacePremiumIcon sx={{ color: '#ffd700 !important' }} />}
-                      onClick={() => setCertOpen(true)}
-                      sx={{
-                        py: 1,
-                        borderRadius: '8px',
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif",
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: '#ffffff',
-                        boxShadow: '0 4px 10px rgba(102, 126, 234, 0.3)',
-                        '&:hover': {
-                          background: 'linear-gradient(135deg, #5a6fd6 0%, #693db6 100%)',
-                        },
-                      }}
-                    >
-                      Download Certificate
-                    </Button>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      onClick={handleCopyShareableLink}
-                      sx={{
-                        py: 0.75,
-                        borderRadius: '8px',
-                        textTransform: 'none',
-                        fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif",
-                        color: '#667eea',
-                        borderColor: '#667eea',
-                        '&:hover': {
-                          borderColor: '#5a6fd6',
-                          backgroundColor: 'rgba(102, 126, 234, 0.04)',
-                        },
-                      }}
-                    >
-                      Share Certificate
-                    </Button>
-                  </Stack>
-                )}
-
                 {/* Progress bar */}
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -1053,12 +982,6 @@ export default function CourseDetail() {
           </Card>
         </Grid>
       </Grid>
-      <CertificateModal
-        open={certOpen}
-        onClose={() => setCertOpen(false)}
-        courseId={parseInt(id)}
-        courseTitle={course?.title || ''}
-      />
     </Box>
   );
 }

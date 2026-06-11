@@ -21,6 +21,9 @@ import {
   IconButton,
   Tooltip,
   Link,
+  CircularProgress,
+  Container,
+  Alert
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import SchoolIcon from '@mui/icons-material/School';
@@ -40,8 +43,6 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import LaunchIcon from '@mui/icons-material/Launch';
 import Rating from '@mui/material/Rating';
 import { toast } from 'react-toastify';
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import CertificateModal from '../components/Certificate/CertificateModal';
 import api from '../services/api';
 
 const CATEGORIES = [
@@ -64,17 +65,8 @@ export default function Profile() {
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [certOpen, setCertOpen] = useState(false);
-  const [activeCourseId, setActiveCourseId] = useState(null);
-  const [activeCourseTitle, setActiveCourseTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const handleOpenCertificate = (courseId, courseTitle) => {
-    setActiveCourseId(courseId);
-    setActiveCourseTitle(courseTitle);
-    setCertOpen(true);
-  };
 
   const navigate = useNavigate();
 
@@ -94,14 +86,22 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarUrlInput, setAvatarUrlInput] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
+  // Keep a ref to track mount status
+  const mountedRef = React.useRef(true);
 
-    const fetchProfileData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const userRes = await api.get('/users/me', { signal: controller.signal });
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const fetchProfileData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userRes = await api.get('/users/me');
+      if (mountedRef.current) {
         setUser(userRes.data);
         setFullName(userRes.data.full_name || '');
         setBio(userRes.data.bio || '');
@@ -119,30 +119,31 @@ export default function Profile() {
         setSelectedInterests(interestList);
 
         localStorage.setItem('user', JSON.stringify(userRes.data));
-
-        const enrolledRes = await api.get('/users/me/enrolled-courses', { signal: controller.signal });
-        setEnrolledCourses(enrolledRes.data);
-
-        const reviewsRes = await api.get('/users/me/reviews', { signal: controller.signal });
-        setMyReviews(reviewsRes.data);
-      } catch (err) {
-        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-          console.error("Failed to fetch profile data:", err);
-          setError(err.message || "Error loading profile details");
-          toast.error("Error loading profile details");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
       }
-    };
 
+      const enrolledRes = await api.get('/users/me/enrolled-courses');
+      if (mountedRef.current) {
+        setEnrolledCourses(enrolledRes.data || []);
+      }
+
+      const reviewsRes = await api.get('/users/me/reviews');
+      if (mountedRef.current) {
+        setMyReviews(reviewsRes.data || []);
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        console.error("Failed to fetch profile data:", err);
+        setError(err.response?.data?.detail || err.message || "Error loading profile details");
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
     fetchProfileData();
-
-    return () => {
-      controller.abort();
-    };
   }, []);
 
   const handleInterestChange = (category) => {
@@ -272,48 +273,32 @@ export default function Profile() {
 
   if (loading || !user) {
     return (
-      <Box sx={{ flexGrow: 1, py: 2 }}>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ p: 3, borderRadius: '16px', textAlign: 'center' }}>
-              <Skeleton variant="circular" width={120} height={120} sx={{ mx: 'auto', mb: 2 }} />
-              <Skeleton variant="text" width="60%" height={32} sx={{ mx: 'auto', mb: 1 }} />
-              <Skeleton variant="text" width="40%" height={20} sx={{ mx: 'auto' }} />
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <Card sx={{ p: 3, borderRadius: '16px', mb: 4 }}>
-              <Skeleton variant="text" width="30%" height={32} sx={{ mb: 2 }} />
-              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '8px' }} />
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center', mt: 8 }}>
-        <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, mb: 1 }}>
-          😕 Failed to load profile
-        </Typography>
-        <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
-          {error}
-        </Typography>
-        <Button 
-          variant="contained" 
-          onClick={() => window.location.reload()}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            fontFamily: "'Outfit', sans-serif",
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-          }}
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
         >
-          Try Again
-        </Button>
-      </Box>
+          {error}
+        </Alert>
+      </Container>
     );
   }
 
@@ -442,34 +427,7 @@ export default function Profile() {
                 Joined {joinedDate}
               </Typography>
 
-              <Stack direction="row" justifyContent="center" spacing={1} sx={{ mb: 3 }}>
-                <Chip
-                  icon={user.is_public ? <PublicIcon /> : <LockIcon />}
-                  label={user.is_public ? 'Public Profile' : 'Private Profile'}
-                  size="small"
-                  sx={{
-                    bgcolor: user.is_public ? 'rgba(34, 197, 94, 0.1)' : 'rgba(148, 163, 184, 0.1)',
-                    color: user.is_public ? '#22c55e' : '#64748b',
-                    fontWeight: 700,
-                    fontFamily: "'Outfit', sans-serif",
-                  }}
-                />
-                {user.is_public && (
-                  <Chip
-                    icon={<LaunchIcon />}
-                    label="View Public Link"
-                    size="small"
-                    onClick={() => navigate(`/users/${user.username}`)}
-                    sx={{
-                      cursor: 'pointer',
-                      bgcolor: 'rgba(102, 126, 234, 0.1)',
-                      color: '#667eea',
-                      fontWeight: 700,
-                      fontFamily: "'Outfit', sans-serif",
-                    }}
-                  />
-                )}
-              </Stack>
+
 
               {!editMode ? (
                 <Button
@@ -837,34 +795,7 @@ export default function Profile() {
                         </Grid>
                       </Box>
 
-                      <Divider />
 
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={isPublic}
-                            onChange={(e) => setIsPublic(e.target.checked)}
-                            sx={{
-                              color: '#cbd5e1',
-                              '&.Mui-checked': {
-                                color: '#667eea',
-                              },
-                            }}
-                          />
-                        }
-                        label={
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              color: '#1e293b',
-                              fontWeight: 700,
-                              fontFamily: "'Outfit', sans-serif",
-                            }}
-                          >
-                            Make Profile Public (other users can view your profile details and courses)
-                          </Typography>
-                        }
-                      />
 
                       <Button
                         type="submit"
@@ -1238,25 +1169,8 @@ export default function Profile() {
                                         fontFamily: "'Outfit', sans-serif",
                                         backgroundColor: item.progress >= 100 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(102, 126, 234, 0.1)',
                                         color: item.progress >= 100 ? '#22c55e' : '#667eea',
-                                        border: item.progress >= 100 ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(102, 126, 234, 0.2)',
                                       }}
                                     />
-                                    {item.progress >= 100 && c.has_certificate && (
-                                      <Chip
-                                        icon={<WorkspacePremiumIcon sx={{ color: '#ffd700 !important', fontSize: '0.9rem !important' }} />}
-                                        label="Certificate Earned"
-                                        size="small"
-                                        sx={{
-                                          fontSize: '0.65rem',
-                                          height: 20,
-                                          fontWeight: 700,
-                                          fontFamily: "'Outfit', sans-serif",
-                                          backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                                          color: '#ffffff',
-                                          border: '1px solid rgba(255, 215, 0, 0.3)',
-                                        }}
-                                      />
-                                    )}
                                   </Stack>
                                 }
                               />
@@ -1309,31 +1223,7 @@ export default function Profile() {
                                 >
                                   {item.progress >= 100 ? 'Review' : 'Continue'}
                                 </Button>
-                                {item.progress >= 100 && c.has_certificate && (
-                                  <Button
-                                    variant="contained"
-                                    size="small"
-                                    onClick={() => handleOpenCertificate(c.id, c.title)}
-                                    sx={{
-                                      borderRadius: '8px',
-                                      textTransform: 'none',
-                                      fontWeight: 700,
-                                      fontFamily: "'Outfit', sans-serif",
-                                      background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
-                                      color: '#1e293b',
-                                      fontSize: '0.7rem',
-                                      width: '100%',
-                                      maxWidth: '130px',
-                                      boxShadow: 'none',
-                                      '&:hover': {
-                                        background: 'linear-gradient(135deg, #e5b800 0%, #b8901c 100%)',
-                                      },
-                                    }}
-                                  >
-                                    Certificate
-                                  </Button>
-                                )}
-                              </Stack>
+                                </Stack>
                             </Grid>
                           </Grid>
                         </ListItem>
@@ -1346,18 +1236,6 @@ export default function Profile() {
           </Stack>
         </Grid>
       </Grid>
-      {activeCourseId && (
-        <CertificateModal
-          open={certOpen}
-          onClose={() => {
-            setCertOpen(false);
-            setActiveCourseId(null);
-            setActiveCourseTitle('');
-          }}
-          courseId={activeCourseId}
-          courseTitle={activeCourseTitle}
-        />
-      )}
     </Box>
   );
 }

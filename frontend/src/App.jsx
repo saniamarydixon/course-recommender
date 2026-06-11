@@ -15,12 +15,10 @@ import Courses from './pages/Courses';
 import CourseDetail from './pages/CourseDetail';
 import Recommendations from './pages/Recommendations';
 import Profile from './pages/Profile';
-import LearningRoadmap from './pages/LearningRoadmap';
 import Wishlist from './pages/Wishlist';
-import Notifications from './pages/Notifications';
-import PublicProfile from './pages/PublicProfile';
+import LearningPaths from './pages/LearningPaths';
+import LearningPathDetail from './pages/LearningPathDetail';
 
-// Create a custom Material-UI theme
 const theme = createTheme({
   palette: {
     primary: {
@@ -71,42 +69,30 @@ const theme = createTheme({
   },
 });
 
-// Protected Route wrapper component
-function ProtectedRoute({ children }) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
+function PrivateRoute({ children }) {
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  return token ? children : <Navigate to="/login" replace />;
 }
 
-// Redirect path helper
 function RootRedirect() {
-  const token = localStorage.getItem('token');
-  if (token) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  return <Navigate to="/login" replace />;
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  return token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
 }
 
-export default function App() {
+function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      
-      <ErrorBoundary>
+    <ErrorBoundary>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
         <Routes>
-          {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
-          {/* Protected Authenticated Routes */}
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <PrivateRoute>
                 <Layout />
-              </ProtectedRoute>
+              </PrivateRoute>
             }
           >
             <Route index element={<RootRedirect />} />
@@ -114,33 +100,29 @@ export default function App() {
             <Route path="courses" element={<Courses />} />
             <Route path="courses/:id" element={<CourseDetail />} />
             <Route path="recommendations" element={<Recommendations />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="learning-paths" element={<LearningRoadmap />} />
             <Route path="wishlist" element={<Wishlist />} />
-            <Route path="notifications" element={<Notifications />} />
-            <Route path="users/:username" element={<PublicProfile />} />
-            
-            {/* Fallback inside Layout */}
+            <Route path="profile" element={<Profile />} />
+            <Route path="learning-paths" element={<LearningPaths />} />
+            <Route path="learning-paths/:id" element={<LearningPathDetail />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
-
-          {/* Global Fallback */}
           <Route path="*" element={<RootRedirect />} />
         </Routes>
-      </ErrorBoundary>
-
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
-    </ThemeProvider>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
+
+export default App;

@@ -36,6 +36,13 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+from app.api.routes import learning_paths
+app.include_router(
+    learning_paths.router, 
+    prefix="/api/v1/learning-paths", 
+    tags=["Learning Paths"]
+)
+
 from fastapi.staticfiles import StaticFiles
 import os
 os.makedirs("static/avatars", exist_ok=True)

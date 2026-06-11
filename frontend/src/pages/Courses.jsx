@@ -23,20 +23,18 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
-  Slider,
   Radio,
   RadioGroup,
   Pagination,
   Divider,
-  Skeleton,
+  Container,
+  Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
@@ -85,7 +83,6 @@ export default function Courses() {
   const isFree = searchParams.get('is_free') === 'true';
   const minRating = searchParams.get('min_rating') ? parseFloat(searchParams.get('min_rating')) : '';
   const durations = searchParams.get('duration') ? searchParams.get('duration').split(',') : [];
-  const hasCertificate = searchParams.get('has_certificate') === 'true';
   const sortBy = searchParams.get('sort_by') || 'Default';
   const page = searchParams.get('page') ? parseInt(searchParams.get('page')) : 1;
   const q = searchParams.get('q') || '';
@@ -96,16 +93,11 @@ export default function Courses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [localSearch, setLocalSearch] = useState(q);
-  const [localPriceRange, setLocalPriceRange] = useState([minPrice, maxPrice]);
 
   // Sync local states with URL values when URL updates
   useEffect(() => {
     setLocalSearch(q);
   }, [q]);
-
-  useEffect(() => {
-    setLocalPriceRange([minPrice, maxPrice]);
-  }, [minPrice, maxPrice]);
 
   // Debounce search typing to URL parameters
   useEffect(() => {
@@ -125,86 +117,114 @@ export default function Courses() {
     return () => clearTimeout(handler);
   }, [localSearch]);
 
-  // Fetch course list and wishlist ids
+  // Fetch course list and wishlist ids in one effect to prevent race conditions
   useEffect(() => {
-    const controller = new AbortController();
-    api.get('/users/me/wishlist', { signal: controller.signal })
-      .then(res => {
-        setWishlistIds((res.data || []).map(c => c.id));
-      })
-      .catch(err => {
-        if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-          console.error("Failed to fetch wishlist:", err);
+    let mounted = true;
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch wishlist ids
+        const wishRes = await api.get('/users/me/wishlist');
+        if (mounted) {
+          setWishlistIds((wishRes.data || []).map(c => c.id));
         }
-      });
-    return () => controller.abort();
-  }, []);
 
-  const fetchFilteredCourses = async (signal) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = {};
-      if (q) params.q = q;
-      if (categories.length > 0) params.categories = categories;
-      if (levels.length > 0) params.levels = levels;
-      if (isFree) {
-        params.is_free = true;
-      } else {
-        if (minPrice > 0) params.min_price = minPrice;
-        if (maxPrice < 200) params.max_price = maxPrice;
-      }
-      if (minRating) params.min_rating = minRating;
-      if (hasCertificate) params.has_certificate = true;
-      if (sortBy && sortBy !== 'Default') {
-        const sortMap = {
-          'Highest Rated': 'highest_rated',
-          'Lowest Price': 'lowest_price',
-          'Highest Price': 'highest_price',
-          'Most Popular': 'most_popular',
-          'Newest': 'newest',
-          'Shortest': 'shortest',
-          'Longest': 'longest'
-        };
-        params.sort_by = sortMap[sortBy] || sortBy;
-      }
+        // Fetch courses search parameters
+        const params = {};
+        if (q) params.q = q;
+        if (categories.length > 0) params.categories = categories;
+        if (levels.length > 0) params.levels = levels;
+        if (isFree) {
+          params.is_free = true;
+        } else {
+          if (minPrice > 0) params.min_price = minPrice;
+          if (maxPrice < 200) params.max_price = maxPrice;
+        }
+        if (minRating) params.min_rating = minRating;
+        if (sortBy && sortBy !== 'Default') {
+          const sortMap = {
+            'Highest Rated': 'highest_rated',
+            'Lowest Price': 'lowest_price',
+            'Highest Price': 'highest_price',
+            'Most Popular': 'most_popular',
+            'Newest': 'newest',
+            'Shortest': 'shortest',
+            'Longest': 'longest'
+          };
+          params.sort_by = sortMap[sortBy] || sortBy;
+        }
+        if (durations.length > 0) {
+          const mins = [];
+          const maxes = [];
+          if (durations.includes('under-10')) { mins.push(0); maxes.push(10); }
+          if (durations.includes('10-30')) { mins.push(10); maxes.push(30); }
+          if (durations.includes('30-50')) { mins.push(30); maxes.push(50); }
+          if (durations.includes('over-50')) { mins.push(50); maxes.push(999); }
+          params.min_duration = Math.min(...mins);
+          params.max_duration = Math.max(...maxes);
+        }
+        params.page = page;
+        params.per_page = 12;
 
-      if (durations.length > 0) {
-        const mins = [];
-        const maxes = [];
-        if (durations.includes('under-10')) { mins.push(0); maxes.push(10); }
-        if (durations.includes('10-30')) { mins.push(10); maxes.push(30); }
-        if (durations.includes('30-50')) { mins.push(30); maxes.push(50); }
-        if (durations.includes('over-50')) { mins.push(50); maxes.push(999); }
-        params.min_duration = Math.min(...mins);
-        params.max_duration = Math.max(...maxes);
+        const res = await api.get('/courses/search', { params });
+        if (mounted) {
+          setCoursesData(res.data || { courses: [], total: 0, page: 1, per_page: 12, pages: 1 });
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('Error fetching courses:', err);
+          setError(err.response?.data?.detail || err.message || 'Failed to load courses');
+          setCoursesData({ courses: [], total: 0, page: 1, per_page: 12, pages: 1 });
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
+    };
 
-      params.page = page;
-      params.per_page = 12;
+    fetchData();
 
-      const res = await api.get('/courses/search', { params, signal });
-      setCoursesData(res.data);
-    } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-        console.error("Failed to search courses:", err);
-        setError(err.message || 'Failed to search courses');
-        toast.error("Failed to load courses");
-      }
-    } finally {
-      if (!signal || !signal.aborted) {
-        setLoading(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchFilteredCourses(controller.signal);
     return () => {
-      controller.abort();
+      mounted = false;
     };
   }, [searchParams]);
+
+  // ALWAYS show loading as requested in the template
+  if (loading) {
+    return (
+      <Container sx={{ py: 8, textAlign: 'center' }}>
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 2, fontFamily: "'Outfit', sans-serif" }}>Loading...</Typography>
+      </Container>
+    );
+  }
+
+  // ALWAYS show error as requested in the template
+  if (error) {
+    return (
+      <Container sx={{ py: 4 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2, fontFamily: "'Outfit', sans-serif" }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Container>
+    );
+  }
 
   // Wishlist actions
   const handleWishlistToggle = async (e, courseId) => {
@@ -280,14 +300,6 @@ export default function Courses() {
     setSearchParams(newParams);
   };
 
-  const handlePriceRangeCommit = (event, newValue) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('min_price', newValue[0].toString());
-    newParams.set('max_price', newValue[1].toString());
-    newParams.set('page', '1');
-    setSearchParams(newParams);
-  };
-
   const handleIsFreeToggle = (e) => {
     const checked = e.target.checked;
     const newParams = new URLSearchParams(searchParams);
@@ -297,18 +309,6 @@ export default function Courses() {
       newParams.delete('max_price');
     } else {
       newParams.delete('is_free');
-    }
-    newParams.set('page', '1');
-    setSearchParams(newParams);
-  };
-
-  const handleHasCertificateToggle = (e) => {
-    const checked = e.target.checked;
-    const newParams = new URLSearchParams(searchParams);
-    if (checked) {
-      newParams.set('has_certificate', 'true');
-    } else {
-      newParams.delete('has_certificate');
     }
     newParams.set('page', '1');
     setSearchParams(newParams);
@@ -389,14 +389,6 @@ export default function Courses() {
     setSearchParams(newParams);
   };
 
-  const handleRemovePriceChip = () => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('min_price');
-    newParams.delete('max_price');
-    newParams.set('page', '1');
-    setSearchParams(newParams);
-  };
-
   const handleRemoveFreeChip = () => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('is_free');
@@ -407,13 +399,6 @@ export default function Courses() {
   const handleRemoveRatingChip = () => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('min_rating');
-    newParams.set('page', '1');
-    setSearchParams(newParams);
-  };
-
-  const handleRemoveCertificateChip = () => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('has_certificate');
     newParams.set('page', '1');
     setSearchParams(newParams);
   };
@@ -434,12 +419,12 @@ export default function Courses() {
   };
 
   // Helper to check if any filters are active
-  const hasActiveFilters = q || categories.length > 0 || levels.length > 0 || 
-    (minPrice > 0 || maxPrice < 200) || isFree || minRating || durations.length > 0 || 
-    hasCertificate || sortBy !== 'Default';
+  const hasActiveFilters = q || categories.length > 0 || levels.length > 0 || isFree || minRating || durations.length > 0 || sortBy !== 'Default';
+
+  const coursesList = coursesData?.courses || [];
 
   return (
-    <Box sx={{ flexGrow: 1, py: 2 }}>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Title Header */}
       <Box sx={{ mb: 4 }}>
         <Typography
@@ -448,62 +433,47 @@ export default function Courses() {
             fontWeight: 800,
             color: '#1e293b',
             fontFamily: "'Outfit', sans-serif",
+            mb: 1,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            display: 'inline-block',
           }}
         >
-          🎓 Advanced Courses Explorer
+          Explore Courses
         </Typography>
-        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5, fontFamily: "'Outfit', sans-serif" }}>
-          Find, filter, and master high-quality interactive lectures using professional parameters.
+        <Typography variant="body1" sx={{ color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
+          Choose from 26 high-quality courses curated dynamically for you
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
-        {/* Left Side: Advanced Filters Panel */}
+      {/* Main Grid structure containing Filter Sidebar and Results Area */}
+      <Grid container spacing={4}>
+        {/* Left Side: Filter Sidebar */}
         <Grid item xs={12} md={3.5}>
           <Card
             sx={{
               p: 3,
-              borderRadius: '16px',
+              borderRadius: '24px',
               border: '1px solid #e2e8f0',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-              backgroundColor: '#ffffff',
               position: 'sticky',
-              top: '24px',
+              top: '90px',
+              backgroundColor: '#ffffff',
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1, fontFamily: "'Outfit', sans-serif" }}>
-                <FilterListIcon sx={{ color: '#667eea' }} /> Filters
-              </Typography>
-              {hasActiveFilters && (
-                <Button 
-                  onClick={handleClearAllFilters} 
-                  size="small" 
-                  sx={{ textTransform: 'none', fontWeight: 700, color: '#667eea' }}
-                >
-                  Clear All
-                </Button>
-              )}
-            </Stack>
-
-            <Divider sx={{ mb: 2 }} />
-
-            <Stack spacing={3}>
-              {/* Search Bar inside Sidebar */}
+            <Stack spacing={3.5}>
+              {/* Search Course input */}
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
-                  Search keywords
+                  Search Title
                 </Typography>
                 <TextField
-                  placeholder="Title, instructor, tag..."
-                  value={localSearch}
-                  onChange={(e) => setLocalSearch(e.target.value)}
                   fullWidth
                   size="small"
+                  variant="outlined"
+                  placeholder="e.g. Python, React"
+                  value={localSearch}
+                  onChange={(e) => setLocalSearch(e.target.value)}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -512,16 +482,17 @@ export default function Courses() {
                     ),
                     endAdornment: localSearch && (
                       <InputAdornment position="end">
-                        <IconButton onClick={() => setLocalSearch('')} edge="end" size="small">
-                          <ClearIcon fontSize="small" />
+                        <IconButton size="small" onClick={() => setLocalSearch('')} edge="end">
+                          <ClearIcon />
                         </IconButton>
                       </InputAdornment>
-                    )
+                    ),
                   }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 />
               </Box>
 
-              {/* Categories Checklist */}
+              {/* Categories check filters */}
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
                   Categories
@@ -551,10 +522,10 @@ export default function Courses() {
                 </FormGroup>
               </Box>
 
-              {/* Levels Checklist */}
+              {/* Levels filters */}
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
-                  Levels
+                  Skill Level
                 </Typography>
                 <FormGroup>
                   {LEVELS.map((lvl) => (
@@ -581,34 +552,11 @@ export default function Courses() {
                 </FormGroup>
               </Box>
 
-              {/* Price Filter */}
+              {/* Price Type */}
               <Box>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', fontFamily: "'Outfit', sans-serif" }}>
-                    Price Range
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#667eea', fontFamily: "'Outfit', sans-serif" }}>
-                    {isFree ? 'Free' : `$${localPriceRange[0]} - $${localPriceRange[1]}`}
-                  </Typography>
-                </Stack>
-                <Slider
-                  disabled={isFree}
-                  value={localPriceRange}
-                  onChange={(e, val) => setLocalPriceRange(val)}
-                  onChangeCommitted={handlePriceRangeCommit}
-                  valueLabelDisplay="auto"
-                  min={0}
-                  max={200}
-                  sx={{
-                    color: '#667eea',
-                    '& .MuiSlider-thumb': {
-                      backgroundColor: '#ffffff',
-                      border: '2px solid #667eea',
-                    },
-                    '& .MuiSlider-track': { height: 6 },
-                    '& .MuiSlider-rail': { height: 6, opacity: 0.2 },
-                  }}
-                />
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
+                  Price Type
+                </Typography>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -623,13 +571,13 @@ export default function Courses() {
                   }
                   label={
                     <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>
-                      Free courses only
+                      Free Courses Only
                     </Typography>
                   }
                 />
               </Box>
 
-              {/* Ratings Radio Selector */}
+              {/* Rating selection radio */}
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
                   Minimum Rating
@@ -640,6 +588,16 @@ export default function Courses() {
                       value=""
                       control={<Radio size="small" sx={{ color: '#cbd5e1', '&.Mui-checked': { color: '#667eea' } }} />}
                       label={<Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>Any Rating</Typography>}
+                    />
+                    <FormControlLabel
+                      value="4.5"
+                      control={<Radio size="small" sx={{ color: '#cbd5e1', '&.Mui-checked': { color: '#667eea' } }} />}
+                      label={
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>4.5+ Stars</Typography>
+                          <Rating value={4.5} readOnly size="small" precision={0.5} sx={{ color: '#f59e0b', fontSize: '0.85rem' }} />
+                        </Stack>
+                      }
                     />
                     <FormControlLabel
                       value="4"
@@ -658,16 +616,6 @@ export default function Courses() {
                         <Stack direction="row" alignItems="center" spacing={0.5}>
                           <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>3.0+ Stars</Typography>
                           <Rating value={3} readOnly size="small" max={3} sx={{ color: '#f59e0b', fontSize: '0.85rem' }} />
-                        </Stack>
-                      }
-                    />
-                    <FormControlLabel
-                      value="2"
-                      control={<Radio size="small" sx={{ color: '#cbd5e1', '&.Mui-checked': { color: '#667eea' } }} />}
-                      label={
-                        <Stack direction="row" alignItems="center" spacing={0.5}>
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>2.0+ Stars</Typography>
-                          <Rating value={2} readOnly size="small" max={2} sx={{ color: '#f59e0b', fontSize: '0.85rem' }} />
                         </Stack>
                       }
                     />
@@ -703,34 +651,6 @@ export default function Courses() {
                     />
                   ))}
                 </FormGroup>
-              </Box>
-
-              {/* Extra Features */}
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 700, color: '#475569', mb: 1, fontFamily: "'Outfit', sans-serif" }}>
-                  Features
-                </Typography>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={hasCertificate}
-                      onChange={handleHasCertificateToggle}
-                      sx={{
-                        color: '#cbd5e1',
-                        '&.Mui-checked': { color: '#667eea' },
-                      }}
-                    />
-                  }
-                  label={
-                    <Stack direction="row" alignItems="center" spacing={0.5}>
-                      <WorkspacePremiumIcon size="small" sx={{ color: '#ffd700', fontSize: '1.1rem' }} />
-                      <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#334155', fontFamily: "'Outfit', sans-serif" }}>
-                        Includes Certificate
-                      </Typography>
-                    </Stack>
-                  }
-                />
               </Box>
             </Stack>
           </Card>
@@ -780,7 +700,7 @@ export default function Courses() {
                   fontFamily: "'Outfit', sans-serif",
                 }}
               >
-                Showing {(coursesData?.courses || []).length} of {(coursesData?.total || 0)} courses
+                Showing {coursesList.length} of {coursesData?.total || 0} courses
               </Typography>
             </Stack>
 
@@ -813,22 +733,13 @@ export default function Courses() {
                     sx={{ backgroundColor: '#764ba2', color: '#ffffff', fontWeight: 600 }}
                   />
                 ))}
-                {isFree ? (
+                {isFree && (
                   <Chip
                     label="Price: Free Only"
                     size="small"
                     onDelete={handleRemoveFreeChip}
                     sx={{ backgroundColor: '#10b981', color: '#ffffff', fontWeight: 600 }}
                   />
-                ) : (
-                  (minPrice > 0 || maxPrice < 200) && (
-                    <Chip
-                      label={`Price: $${minPrice} - $${maxPrice}`}
-                      size="small"
-                      onDelete={handleRemovePriceChip}
-                      sx={{ backgroundColor: '#cbd5e1', color: '#334155', fontWeight: 600 }}
-                    />
-                  )
                 )}
                 {minRating && (
                   <Chip
@@ -847,14 +758,6 @@ export default function Courses() {
                     sx={{ backgroundColor: '#f1f5f9', color: '#334155', fontWeight: 600 }}
                   />
                 ))}
-                {hasCertificate && (
-                  <Chip
-                    label="Includes Certificate"
-                    size="small"
-                    onDelete={handleRemoveCertificateChip}
-                    sx={{ backgroundColor: '#ffd700', color: '#334155', fontWeight: 600 }}
-                  />
-                )}
                 {sortBy !== 'Default' && (
                   <Chip
                     label={`Sorted: ${sortBy}`}
@@ -868,43 +771,7 @@ export default function Courses() {
           </Card>
 
           {/* Results courses list or empty state */}
-          {loading ? (
-            <Grid container spacing={3}>
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <Grid item xs={12} sm={6} md={4} key={i}>
-                  <Card sx={{ borderRadius: '16px', border: '1px solid #e2e8f0', p: 0 }}>
-                    <Skeleton variant="rounded" height={160} />
-                    <CardContent sx={{ p: 2 }}>
-                      <Skeleton variant="text" height={28} width="80%" sx={{ mb: 1 }} />
-                      <Skeleton variant="text" height={20} width="60%" sx={{ mb: 2 }} />
-                      <Skeleton variant="rounded" height={36} />
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          ) : error ? (
-            <Box sx={{ p: 4, textAlign: 'center', width: '100%', bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-              <Typography variant="h5" color="error" sx={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>
-                😕 Failed to load courses
-              </Typography>
-              <Typography sx={{ my: 2, color: 'text.secondary', fontFamily: "'Outfit', sans-serif" }}>
-                {error}
-              </Typography>
-              <Button 
-                variant="contained" 
-                onClick={() => fetchFilteredCourses()}
-                sx={{
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontFamily: "'Outfit', sans-serif",
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                }}
-              >
-                Retry
-              </Button>
-            </Box>
-          ) : (coursesData?.courses || []).length === 0 ? (
+          {coursesList.length === 0 ? (
             <Box
               sx={{
                 display: 'flex',
@@ -925,7 +792,7 @@ export default function Courses() {
                 No courses match your criteria
               </Typography>
               <Typography variant="body1" sx={{ color: '#64748b', mb: 3, maxWidth: 450, fontFamily: "'Outfit', sans-serif" }}>
-                Try relaxing your rating requirements, expanding the price slider range, or clearing tags.
+                Try relaxing your rating requirements, searching for other titles, or clearing tags.
               </Typography>
               <Button
                 variant="contained"
@@ -944,235 +811,212 @@ export default function Courses() {
               </Button>
             </Box>
           ) : (
-            <>
-              <Grid container spacing={3}>
-                {(coursesData?.courses || []).map((course) => {
-                  const priceText = course.price === 0 || !course.price ? 'FREE' : `$${course.price.toFixed(2)}`;
-                  const thumbnail = course.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
+            <Grid container spacing={3}>
+              {coursesList.map((course) => {
+                const priceText = course.price === 0 || !course.price ? 'FREE' : `$${course.price.toFixed(2)}`;
+                const thumbnail = course.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
 
-                  return (
-                    <Grid item xs={12} sm={6} md={4} key={course.id}>
-                      <Card
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={course.id}>
+                    <Card
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: '16px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                        transition: 'all 0.25s ease-in-out',
+                        '&:hover': {
+                          transform: 'translateY(-6px)',
+                          boxShadow: '0 12px 24px -4px rgba(102, 126, 234, 0.2)',
+                        },
+                        overflow: 'hidden',
+                        position: 'relative',
+                      }}
+                    >
+                      {/* Heart Wishlist Overlay */}
+                      <IconButton
+                        onClick={(e) => handleWishlistToggle(e, course.id)}
                         sx={{
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                          transition: 'all 0.25s ease-in-out',
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          zIndex: 10,
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
                           '&:hover': {
-                            transform: 'translateY(-6px)',
-                            boxShadow: '0 12px 24px -4px rgba(102, 126, 234, 0.2)',
+                            backgroundColor: '#ffffff',
+                            transform: 'scale(1.1)',
                           },
-                          overflow: 'hidden',
-                          position: 'relative',
+                          transition: 'all 0.2s',
+                          color: wishlistIds.includes(course.id) ? '#ef4444' : '#64748b',
                         }}
+                        size="small"
                       >
-                        {/* Heart Wishlist Overlay */}
-                        <IconButton
-                          onClick={(e) => handleWishlistToggle(e, course.id)}
-                          sx={{
-                            position: 'absolute',
-                            top: 12,
-                            right: 12,
-                            zIndex: 10,
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
-                            '&:hover': {
-                              backgroundColor: '#ffffff',
-                              transform: 'scale(1.1)',
-                            },
-                            transition: 'all 0.2s',
-                            color: wishlistIds.includes(course.id) ? '#ef4444' : '#64748b',
-                          }}
-                          size="small"
-                        >
-                          {wishlistIds.includes(course.id) ? (
-                            <FavoriteIcon fontSize="small" />
-                          ) : (
-                            <FavoriteBorderIcon fontSize="small" />
-                          )}
-                        </IconButton>
+                        {wishlistIds.includes(course.id) ? (
+                          <FavoriteIcon fontSize="small" />
+                        ) : (
+                          <FavoriteBorderIcon fontSize="small" />
+                        )}
+                      </IconButton>
 
-                        <CardActionArea
-                          onClick={() => navigate(`/courses/${course.id}`)}
-                          sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
-                        >
-                          {/* Course image container */}
-                          <Box sx={{ position: 'relative', height: 160, overflow: 'hidden' }}>
-                            <CardMedia
-                              component="img"
-                              image={thumbnail}
-                              alt={course.title}
+                      <CardActionArea
+                        onClick={() => navigate(`/courses/${course.id}`)}
+                        sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
+                      >
+                        {/* Course image container */}
+                        <Box sx={{ position: 'relative', height: 160, overflow: 'hidden' }}>
+                          <CardMedia
+                            component="img"
+                            image={thumbnail}
+                            alt={course.title}
+                            sx={{
+                              height: '100%',
+                              width: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
+                          {/* Badges overlay */}
+                          <Box sx={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            <Chip
+                              label={course.category}
+                              size="small"
                               sx={{
-                                height: '100%',
-                                width: '100%',
-                                objectFit: 'cover',
+                                backgroundColor: 'rgba(102, 126, 234, 0.9)',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                fontSize: '0.7rem',
+                                fontFamily: "'Outfit', sans-serif",
+                                backdropFilter: 'blur(4px)',
                               }}
                             />
-                            {/* Badges overlay */}
-                            <Box sx={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                              <Chip
-                                label={course.category}
-                                size="small"
-                                sx={{
-                                  backgroundColor: 'rgba(102, 126, 234, 0.9)',
-                                  color: '#ffffff',
-                                  fontWeight: 700,
-                                  fontSize: '0.7rem',
-                                  fontFamily: "'Outfit', sans-serif",
-                                  backdropFilter: 'blur(4px)',
-                                }}
-                              />
-                              <Chip
-                                label={course.level}
-                                size="small"
-                                sx={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                  color: '#475569',
-                                  fontWeight: 700,
-                                  fontSize: '0.7rem',
-                                  fontFamily: "'Outfit', sans-serif",
-                                  backdropFilter: 'blur(4px)',
-                                }}
-                              />
-                            </Box>
-
-                            {/* Certificate Badge */}
-                            {course.has_certificate && (
-                              <Chip
-                                icon={<WorkspacePremiumIcon sx={{ color: '#ffd700 !important', fontSize: '0.9rem !important' }} />}
-                                label="Cert"
-                                size="small"
-                                sx={{
-                                  position: 'absolute',
-                                  top: 12,
-                                  left: 12,
-                                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                                  color: '#ffffff',
-                                  fontWeight: 700,
-                                  fontSize: '0.65rem',
-                                  fontFamily: "'Outfit', sans-serif",
-                                  backdropFilter: 'blur(4px)',
-                                  border: '1px solid rgba(255, 215, 0, 0.4)',
-                                }}
-                              />
-                            )}
+                            <Chip
+                              label={course.level}
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                color: '#475569',
+                                fontWeight: 700,
+                                fontSize: '0.7rem',
+                                fontFamily: "'Outfit', sans-serif",
+                                backdropFilter: 'blur(4px)',
+                              }}
+                            />
                           </Box>
+                        </Box>
 
-                          {/* Content details */}
-                          <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                            <Typography
-                              variant="subtitle1"
-                              component="h2"
-                              sx={{
-                                fontWeight: 800,
-                                color: '#1e293b',
-                                fontFamily: "'Outfit', sans-serif",
-                                lineHeight: 1.3,
-                                mb: 0.5,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                height: '2.5rem',
-                              }}
-                            >
-                              {course.title}
-                            </Typography>
+                        {/* Content details */}
+                        <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                          <Typography
+                            variant="subtitle1"
+                            component="h2"
+                            sx={{
+                              fontWeight: 800,
+                              color: '#1e293b',
+                              fontFamily: "'Outfit', sans-serif",
+                              lineHeight: 1.3,
+                              mb: 0.5,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              height: '2.5rem',
+                            }}
+                          >
+                            {course.title}
+                          </Typography>
 
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                color: '#64748b',
-                                fontWeight: 500,
-                                fontFamily: "'Outfit', sans-serif",
-                                mb: 2,
-                              }}
-                            >
-                              By {course.instructor || 'Expert Instructor'}
-                            </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: '#64748b',
+                              fontWeight: 500,
+                              fontFamily: "'Outfit', sans-serif",
+                              mb: 2,
+                            }}
+                          >
+                            By {course.instructor || 'Expert Instructor'}
+                          </Typography>
 
-                            <Box sx={{ mt: 'auto' }}>
-                              {/* Rating and Reviews count */}
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                                <Rating
-                                  value={course.rating || 4.5}
-                                  precision={0.1}
-                                  readOnly
-                                  size="small"
-                                  sx={{ color: '#f59e0b' }}
-                                />
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: '#475569',
-                                    fontFamily: "'Outfit', sans-serif",
-                                  }}
-                                >
-                                  {(course.rating || 4.5).toFixed(1)} ({course.enrollment_count || 120})
-                                </Typography>
-                              </Box>
-
-                              {/* Price and duration */}
-                              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                <Typography
-                                  variant="subtitle1"
-                                  sx={{
-                                    fontWeight: 900,
-                                    color: '#667eea',
-                                    fontFamily: "'Outfit', sans-serif",
-                                  }}
-                                >
-                                  {priceText}
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: '#94a3b8',
-                                    fontWeight: 600,
-                                    fontFamily: "'Outfit', sans-serif",
-                                  }}
-                                >
-                                  ⏱️ {course.duration_hours} hrs
-                                </Typography>
-                              </Stack>
+                          <Box sx={{ mt: 'auto' }}>
+                            {/* Rating and Reviews count */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                              <Rating
+                                value={course.rating || 4.5}
+                                precision={0.1}
+                                readOnly
+                                size="small"
+                                sx={{ color: '#f59e0b' }}
+                              />
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 700,
+                                  color: '#475569',
+                                  fontFamily: "'Outfit', sans-serif",
+                                }}
+                              >
+                                {(course.rating || 4.5).toFixed(1)} ({course.enrollment_count || 120})
+                              </Typography>
                             </Box>
-                          </CardContent>
-                        </CardActionArea>
-                      </Card>
-                    </Grid>
-                  );
-                })}
-              </Grid>
 
-              {/* Bottom Pagination Controls */}
-              {coursesData.pages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
-                  <Pagination
-                    count={coursesData.pages}
-                    page={page}
-                    onChange={(e, val) => handlePageChange(val)}
-                    color="primary"
-                    sx={{
-                      '& .MuiPaginationItem-root': {
-                        fontFamily: "'Outfit', sans-serif",
-                        fontWeight: 700,
-                      },
-                      '& .Mui-selected': {
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important',
-                        color: '#ffffff',
-                      }
-                    }}
-                  />
-                </Box>
-              )}
-            </>
+                            {/* Price and duration */}
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: 900,
+                                  color: '#667eea',
+                                  fontFamily: "'Outfit', sans-serif",
+                                }}
+                              >
+                                {priceText}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: '#94a3b8',
+                                  fontWeight: 600,
+                                  fontFamily: "'Outfit', sans-serif",
+                                }}
+                              >
+                                ⏱️ {course.duration_hours} hrs
+                              </Typography>
+                            </Stack>
+                          </Box>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
+
+          {/* Bottom Pagination Controls */}
+          {coursesData.pages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
+              <Pagination
+                count={coursesData.pages}
+                page={page}
+                onChange={(e, val) => handlePageChange(val)}
+                color="primary"
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    fontFamily: "'Outfit', sans-serif",
+                    fontWeight: 700,
+                  },
+                  '& .Mui-selected': {
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important',
+                    color: '#ffffff',
+                  }
+                }}
+              />
+            </Box>
           )}
         </Grid>
       </Grid>
-    </Box>
+    </Container>
   );
 }
