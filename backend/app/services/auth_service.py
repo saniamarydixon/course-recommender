@@ -38,15 +38,7 @@ class AuthService:
             )
         )
         
-        # Create welcome notification
-        from app.services.notification_service import NotificationService
-        NotificationService(self.db).create_notification(
-            user_id=user.id,
-            type="system",
-            title="Welcome to CourseRec AI! 🎓",
-            message=f"Welcome, {user.full_name or user.username}! Discover customized course paths and advance your skills today.",
-            link="/dashboard"
-        )
+
 
         return self._create_tokens(str(user.id))
 

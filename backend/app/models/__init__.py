@@ -5,7 +5,6 @@ from app.models.roadmap import LearningRoadmap
 from app.models.roadmap_step import RoadmapStep
 from app.models.user import User
 from app.models.review import Review
-from app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -15,5 +14,4 @@ __all__ = [
     "LearningRoadmap",
     "RoadmapStep",
     "Review",
-    "Notification",
 ]

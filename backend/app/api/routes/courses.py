@@ -10,7 +10,6 @@ from app.models.course import Course
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate, CourseSearchResponse
 from app.services.course_service import CourseService
 from app.services.interaction_service import InteractionService
-from app.services.certificate_service import CertificateService
 from app.utils.dependencies import get_current_user
 
 router = APIRouter()
@@ -168,64 +167,6 @@ def get_course(course_id: int, db: Session = Depends(get_db)):
     if not course:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return course
-
-
-@router.get("/{course_id}/certificate")
-def get_course_certificate(
-    course_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    course = CourseService(db).get_by_id(course_id)
-    if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
-    if not course.has_certificate:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This course does not offer certificates"
-        )
-
-    # Check enrollment & progress
-    enrollments = InteractionService(db).get_user_enrollments(current_user.id)
-    enrolled = False
-    completed = False
-    progress = 0
-    for enrollment in enrollments:
-        if enrollment.course_id == course_id:
-            enrolled = True
-            progress = enrollment.progress or 0
-            if enrollment.interaction_type == "completion" or progress >= 100:
-                completed = True
-            break
-
-    if not enrolled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You are not enrolled in this course"
-        )
-
-    if not completed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"You must complete the course (100% progress) to download the certificate. Current progress is {progress}%."
-        )
-
-    # Generate certificate PDF
-    pdf_buffer = CertificateService().generate_certificate(current_user, course)
-    
-    # Format filename cleanly
-    safe_title = "".join([c if c.isalnum() else "_" for c in course.title])
-    filename = f"Certificate_{safe_title}.pdf"
-
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
-            "Access-Control-Expose-Headers": "Content-Disposition"
-        }
-    )
 
 
 

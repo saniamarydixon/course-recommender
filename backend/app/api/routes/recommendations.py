@@ -24,19 +24,6 @@ def generate_recommendations(
 ):
     recommendations = RecommendationService(db).get_user_recommendations(current_user, params, algorithm)
     
-    # Create notification
-    from app.services.notification_service import NotificationService
-    try:
-        NotificationService(db).create_notification(
-            user_id=current_user.id,
-            type="recommendation",
-            title="Recommendations Updated! ✨",
-            message=f"We have updated your course recommendations using the {algorithm} mode. Check them out!",
-            link="/recommendations"
-        )
-    except Exception as e:
-        print("Failed to trigger recommendation notification:", e)
-        
     return recommendations
 
 
