@@ -31,4 +31,5 @@ numpy==2.2.0
 pandas==2.2.3
 joblib==1.4.2
 google-generativeai
+gunicorn==23.0.0
 

@@ -157,7 +157,8 @@ npm run dev
 
 | Variable             | Description     | Default                          |
 |----------------------|-----------------|----------------------------------|
-| `VITE_API_BASE_URL`  | Backend API URL | http://localhost:8000/api/v1     |
+| `VITE_API_URL`       | Backend API URL | http://localhost:8000/api/v1     |
+
 
 ## ML Recommendation Engine
 
@@ -177,6 +178,50 @@ The recommendation engine lives in `backend/app/ml/recommender.py`. The current 
 - Enable Redis for caching recommendation results
 - Run `npm run build` and serve frontend static files via CDN or Nginx
 
+## Deployment (Render & Vercel)
+
+This project is configured for easy deployment of the backend to **Render.com** and the frontend to **Vercel**.
+
+### Backend Deployment (Render)
+
+1. **Database Setup**:
+   - Create a new **PostgreSQL** database on Render.
+   - Name it `courserec-db`.
+
+2. **Web Service Setup**:
+   - Create a new **Web Service** on Render connected to your Git repository.
+   - Use the **Blueprint** mode (which will automatically detect `render.yaml` at the root) OR configure the service manually:
+     - **Root Directory**: `backend`
+     - **Build Command**: `pip install -r requirements.txt`
+     - **Start Command**: `gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
+   - Set the following **Environment Variables**:
+     - `DATABASE_URL`: Set automatically when linking to your Render PostgreSQL database, or provide it manually.
+     - `JWT_SECRET_KEY`: A cryptographically secure random string.
+     - `GEMINI_API_KEY`: Your Gemini API key.
+     - `ENVIRONMENT`: `production`
+     - `FRONTEND_URL`: Your Vercel frontend URL (e.g., `https://your-app.vercel.app`).
+
+3. **Database Initialization**:
+   - Run the seeding script on Render (via the Render shell or as part of a post-deploy build command) to initialize and seed the production database:
+     ```bash
+     python init_production.py
+     ```
+
+### Frontend Deployment (Vercel)
+
+1. **Project Setup**:
+   - Import your repository into Vercel.
+   - Choose the `frontend` folder as the root directory of the project.
+   - Vercel will auto-detect Vite as the framework preset.
+
+2. **Environment Variables**:
+   - Set the following environment variable in the Vercel dashboard:
+     - `VITE_API_URL`: `https://your-render-backend-url.onrender.com/api/v1` (replace with your live Render backend URL).
+
+3. **Deploy**:
+   - Click **Deploy**. Vercel will build and serve your React app, automatically routing traffic to the backend API. The `vercel.json` rewrites ensure React Router works correctly on reload.
+
 ## License
 
 MIT
+

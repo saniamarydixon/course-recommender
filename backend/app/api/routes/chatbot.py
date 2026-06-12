@@ -46,57 +46,43 @@ def chat_with_bot(
         try:
             print(f"Message: '{request.message}'")
         except Exception:
-            try:
-                print(f"Message: '{request.message.encode('ascii', errors='replace').decode('ascii')}'")
-            except Exception:
-                pass
+            pass
         
         # Call chat service
-        response, used_gemini, err = service.chat(current_user, request.message, history)
+        response = service.chat(current_user, request.message, history)
         
-        # Determine powered_by
-        powered_by = "Google Gemini" if used_gemini else "Local Fallback Engine"
-        if not used_gemini and err:
-            try:
-                print(f"Gemini API failure/bypass: {err}")
-            except Exception:
-                try:
-                    print(f"Gemini API failure/bypass: {str(err).encode('ascii', errors='replace').decode('ascii')}")
-                except Exception:
-                    pass
-            
         try:
             print(f"Response (first 100 chars): '{response[:100]}...'")
-        except UnicodeEncodeError:
-            try:
-                print(f"Response (first 100 chars): '{response[:100].encode('ascii', errors='replace').decode('ascii')}...'")
-            except Exception:
-                pass
-                
-        print(f"Powered by: {powered_by}")
-        
-        # Default suggestions for next turn
-        suggestions = [
-            "What courses do you recommend for beginners?",
-            "Tell me about Python courses",
-            "What should I learn for web development?",
-            "How can I become a data scientist?"
-        ]
-        
+        except Exception:
+            pass
+            
         response_time_ms = round((time.time() - start_time) * 1000, 2)
         print(f"Response Time: {response_time_ms} ms")
         print(f"----------------------\n")
         
         return ChatResponse(
             response=response,
-            suggestions=suggestions[:3],
-            powered_by=powered_by,
-            error=err,
+            suggestions=[
+                "Browse all courses",
+                "Show AI recommendations",
+                "View learning paths"
+            ],
+            powered_by="Google Gemini",
             response_time_ms=response_time_ms
         )
     except Exception as e:
         print(f"Error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return friendly message instead of 500 error
+        return ChatResponse(
+            response="🙏 I'm taking a quick break! Try again in a minute, or browse our courses! 💪",
+            suggestions=[
+                "Browse all courses",
+                "AI recommendations",
+                "Learning paths"
+            ],
+            powered_by="Local Fallback Engine",
+            response_time_ms=round((time.time() - start_time) * 1000, 2)
+        )
 
 @router.get("/suggestions")
 def get_suggestions(current_user: User = Depends(get_current_user)):

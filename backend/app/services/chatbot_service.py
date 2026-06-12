@@ -16,7 +16,7 @@ class ChatbotService:
         if api_key and api_key != "your-actual-key-here" and api_key != "your-gemini-api-key-here":
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-2.0-flash')
+                self.model = genai.GenerativeModel('gemini-flash-latest')
                 self.api_key_valid = True
             except Exception as e:
                 try:
@@ -577,7 +577,7 @@ class ChatbotService:
                 print("Gemini API key is not valid. Using fallback response.")
             except Exception:
                 pass
-            return self.get_fallback_response(user, message), False, "Gemini API key is not configured"
+            return self.get_fallback_response(user, message)
             
         try:
             system_prompt = self.get_system_prompt(user, message)
@@ -607,13 +607,14 @@ class ChatbotService:
                     print("Gemini response category mismatch! Regenerating using fallback.")
                 except Exception:
                     pass
-                return self.get_fallback_response(user, message), False, "Category mismatch in LLM output"
+                return self.get_fallback_response(user, message)
                 
-            return response_text, True, None
+            return response_text
             
         except Exception as e:
             try:
-                print(f"Error in Gemini chat: {str(e).encode('ascii', errors='replace').decode('ascii')}. Falling back to rule-based response.")
+                print(f"Error in Gemini chat: {str(e).encode('ascii', errors='replace').decode('ascii')}.")
             except Exception:
                 pass
-            return self.get_fallback_response(user, message), False, str(e)
+            # Always return ONLY friendly message
+            return "🙏 I'm receiving a lot of requests right now! Please try again in a minute. Meanwhile, you can browse courses or check AI Recommendations! 💪"

@@ -94,7 +94,6 @@ export default function ChatBot({ isOpen, onClose }) {
         content: res.data.response,
         poweredBy: res.data.powered_by,
         responseTime: res.data.response_time_ms,
-        error: res.data.error,
       };
 
       setMessages((prev) => [...prev, botResponse]);
@@ -104,13 +103,12 @@ export default function ChatBot({ isOpen, onClose }) {
         setSuggestions(DEFAULT_SUGGESTIONS);
       }
     } catch (err) {
-      console.error(err);
-      const errorResponse = {
+      console.log('Chatbot temporarily unavailable');
+      const friendlyError = {
         role: 'assistant',
-        content: "⚠️ Sorry, I encountered an issue while generating a response. Please check your network connection and try again.",
-        isError: true,
+        content: "🙏 I'm taking a quick break! Please try again in a minute. Meanwhile, you can browse courses or check recommendations! 💪"
       };
-      setMessages((prev) => [...prev, errorResponse]);
+      setMessages((prev) => [...prev, friendlyError]);
     } finally {
       setLoading(false);
     }
@@ -439,35 +437,7 @@ export default function ChatBot({ isOpen, onClose }) {
                     }}
                   >
                     {renderMessageContent(msg.content, isBot)}
-                    
-                    {/* Display API Error clearly */}
-                    {isBot && msg.error && (
-                      <Box sx={{ mt: 1, p: 1, borderRadius: '4px', bgcolor: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                        <Typography variant="caption" sx={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.7rem', fontWeight: 600, fontFamily: "'Outfit', sans-serif" }}>
-                          ⚠️ API Error: {msg.error}
-                        </Typography>
-                      </Box>
-                    )}
                   </Paper>
-
-                  {/* Retry Button */}
-                  {isBot && msg.isError && (
-                    <Chip 
-                      label="Retry" 
-                      onClick={() => handleSend(lastSentMessage)}
-                      size="small" 
-                      sx={{ 
-                        mt: 0.5, 
-                        bgcolor: '#fee2e2', 
-                        color: '#991b1b', 
-                        fontWeight: 700, 
-                        fontFamily: "'Outfit', sans-serif",
-                        height: '20px',
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: '#fca5a5' }
-                      }} 
-                    />
-                  )}
 
                   {/* Debug / Provider Info */}
                   {isBot && (msg.poweredBy || msg.responseTime) && (
