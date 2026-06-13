@@ -26,6 +26,58 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize and seed database on startup"""
+    print("🚀 Application starting...")
+    
+    from app.database import engine, Base, SessionLocal
+    from app.models.user import User
+    from app.models.course import Course
+    
+    # Create all tables
+    print("📊 Creating database tables...")
+    Base.metadata.create_all(bind=engine)
+    print("✅ Tables created")
+    
+    # Check if database needs seeding
+    db = SessionLocal()
+    try:
+        course_count = db.query(Course).count()
+        user_count = db.query(User).count()
+        
+        print(f"📚 Found {course_count} courses, {user_count} users")
+        
+        if course_count == 0:
+            print("🌱 Database empty, seeding now...")
+            try:
+                # Import and run seed function
+                from app.seed_data import seed_database
+                seed_database(db)
+                print("✅ Database seeded successfully!")
+                print(f"✅ Now has {db.query(Course).count()} courses")
+                print(f"✅ Now has {db.query(User).count()} users")
+            except Exception as seed_error:
+                print(f"⚠️ Seeding error: {seed_error}")
+                # Try alternative seeding
+                try:
+                    from app.seed_data import main as seed_main
+                    seed_main()
+                except Exception as e2:
+                    print(f"⚠️ Alternative seeding failed: {e2}")
+        else:
+            print("✅ Database already has data, skipping seed")
+            
+    except Exception as e:
+        print(f"⚠️ Startup error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+    
+    print("✅ Application started successfully!")
+
 import os
 
 # Get frontend URL from environment

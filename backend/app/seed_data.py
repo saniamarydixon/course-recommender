@@ -724,7 +724,8 @@ def main():
     finally:
         db.close()
 
-    db = SessionLocal()
+def seed_database(db: Session) -> None:
+    """Seed the database with sample courses, users, and interactions."""
     try:
         # 1. Seed Users
         print("\nSeeding users...")
@@ -1070,11 +1071,77 @@ def main():
         print("Seeding completed successfully!")
 
     except Exception as e:
-        print(f"\nError seeding database: {e}")
         db.rollback()
+        raise e
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Seed the database with sample data.")
+    parser.add_argument("--reset", action="store_true", help="Delete and recreate the database before seeding.")
+    parser.add_argument("--update-user", type=str, help="Create sample enrollments and roadmaps for the specified user email.")
+    args = parser.parse_args()
+
+    settings = get_settings()
+    
+    if args.reset:
+        print("Resetting database...")
+        # Dispose engine connections
+        engine.dispose()
+        
+        # Determine database file if SQLite
+        if settings.database_url.startswith("sqlite:///"):
+            db_path = settings.database_url.replace("sqlite:///", "")
+            if db_path.startswith("./"):
+                db_path = db_path[2:]
+            
+            # Delete database file
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                    print(f"Deleted SQLite database file: {db_path}")
+                except Exception as e:
+                    print(f"Warning: Could not delete database file: {e}")
+            else:
+                print(f"Database file {db_path} does not exist. Creating fresh.")
+        else:
+            print("Non-sqlite database detected. Dropping all tables via SQLAlchemy...")
+            Base.metadata.drop_all(bind=engine)
+
+        print("Creating tables...")
+        Base.metadata.create_all(bind=engine)
+        print("Tables created successfully.")
+    else:
+        Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        if args.update_user:
+            seed_sample_data_for_user(db, args.update_user)
+            return
+
+        if not args.reset:
+            user_count = db.query(User).count()
+            course_count = db.query(Course).count()
+            if user_count > 0 or course_count > 0:
+                print(f"Database already contains data ({user_count} users, {course_count} courses). Skipping seeding.")
+                print("Use '--reset' flag to delete existing data and reseed.")
+                return
+    except Exception as e:
+        print(f"Error querying database (tables might not exist): {e}")
+        print("Creating tables...")
+        Base.metadata.create_all(bind=engine)
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        seed_database(db)
+    except Exception as e:
+        print(f"\nError seeding database: {e}")
         sys.exit(1)
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     main()
