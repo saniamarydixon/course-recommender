@@ -780,33 +780,39 @@ def seed_database(db: Session) -> None:
         
         users_map = {}
         for u_data in target_users_data:
-            user = User(
-                email=u_data["email"],
-                username=u_data["username"],
-                hashed_password=default_pwd_hash,
-                full_name=u_data["full_name"],
-                bio=u_data["bio"],
-                interests=u_data["interests"],
-                is_active=True,
-                is_superuser=False
-            )
-            db.add(user)
+            user = db.query(User).filter(User.email == u_data["email"]).first()
+            if not user:
+                user = User(
+                    email=u_data["email"],
+                    username=u_data["username"],
+                    hashed_password=default_pwd_hash,
+                    full_name=u_data["full_name"],
+                    bio=u_data["bio"],
+                    interests=u_data["interests"],
+                    is_active=True,
+                    is_superuser=False
+                )
+                db.add(user)
+                db.commit()
             users_map[u_data["email"]] = user
             
         # Add 200 background mock users for rich statistics
         background_users = []
         for i in range(1, 201):
-            bg_user = User(
-                email=f"mock_user_{i}@example.com",
-                username=f"mock_user_{i}",
-                hashed_password=default_pwd_hash,
-                full_name=f"Mock User {i}",
-                bio=f"Bio for mock user {i}",
-                interests=random.choice(["Python", "Web Dev", "Data Science", "Mobile Dev", "Cloud", "DevOps", "AI", "Design", "Business"]),
-                is_active=True,
-                is_superuser=False
-            )
-            db.add(bg_user)
+            email = f"mock_user_{i}@example.com"
+            bg_user = db.query(User).filter(User.email == email).first()
+            if not bg_user:
+                bg_user = User(
+                    email=email,
+                    username=f"mock_user_{i}",
+                    hashed_password=default_pwd_hash,
+                    full_name=f"Mock User {i}",
+                    bio=f"Bio for mock user {i}",
+                    interests=random.choice(["Python", "Web Dev", "Data Science", "Mobile Dev", "Cloud", "DevOps", "AI", "Design", "Business"]),
+                    is_active=True,
+                    is_superuser=False
+                )
+                db.add(bg_user)
             background_users.append(bg_user)
             
         db.commit()
@@ -815,7 +821,8 @@ def seed_database(db: Session) -> None:
         for email in users_map:
             db.refresh(users_map[email])
         for bg_u in background_users:
-            db.refresh(bg_u)
+            if bg_u.id is not None:
+                db.refresh(bg_u)
             
         print(f"Successfully seeded {len(target_users_data)} target users and {len(background_users)} mock users.")
 

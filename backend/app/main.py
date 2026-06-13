@@ -29,54 +29,67 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize and seed database on startup"""
-    print("🚀 Application starting...")
+    """Initialize database and seed if empty"""
+    print("🚀 Starting application...")
     
     from app.database import engine, Base, SessionLocal
     from app.models.user import User
     from app.models.course import Course
+    from app.utils.security import get_password_hash
     
-    # Create all tables
-    print("📊 Creating database tables...")
+    # Create tables
+    print("📊 Creating tables...")
     Base.metadata.create_all(bind=engine)
-    print("✅ Tables created")
     
-    # Check if database needs seeding
+    # Check if needs seeding
     db = SessionLocal()
     try:
-        course_count = db.query(Course).count()
         user_count = db.query(User).count()
+        course_count = db.query(Course).count()
         
-        print(f"📚 Found {course_count} courses, {user_count} users")
+        print(f"Found {user_count} users, {course_count} courses")
+        
+        if user_count == 0:
+            print("🌱 Seeding users...")
+            # Create test users
+            test_users = [
+                ("user1", "user1@example.com", "Test@1234", "User One"),
+                ("user2", "user2@example.com", "Test@1234", "User Two"),
+                ("user3", "user3@example.com", "Test@1234", "User Three"),
+                ("user4", "user4@example.com", "Test@1234", "User Four"),
+                ("user5", "user5@example.com", "Test@1234", "User Five"),
+            ]
+            
+            for username, email, password, full_name in test_users:
+                user = User(
+                    username=username,
+                    email=email,
+                    hashed_password=get_password_hash(password),
+                    full_name=full_name,
+                    is_active=True
+                )
+                db.add(user)
+            
+            db.commit()
+            print("✅ 5 users created")
         
         if course_count == 0:
-            print("🌱 Database empty, seeding now...")
+            print("🌱 Seeding courses...")
             try:
-                # Import and run seed function
                 from app.seed_data import seed_database
                 seed_database(db)
-                print("✅ Database seeded successfully!")
-                print(f"✅ Now has {db.query(Course).count()} courses")
-                print(f"✅ Now has {db.query(User).count()} users")
-            except Exception as seed_error:
-                print(f"⚠️ Seeding error: {seed_error}")
-                # Try alternative seeding
-                try:
-                    from app.seed_data import main as seed_main
-                    seed_main()
-                except Exception as e2:
-                    print(f"⚠️ Alternative seeding failed: {e2}")
-        else:
-            print("✅ Database already has data, skipping seed")
-            
+                print("✅ Courses seeded")
+            except Exception as e:
+                print(f"⚠️ Course seeding error: {e}")
+        
+        print("✅ Database ready!")
+        
     except Exception as e:
         print(f"⚠️ Startup error: {e}")
         import traceback
         traceback.print_exc()
     finally:
         db.close()
-    
-    print("✅ Application started successfully!")
 
 import os
 
@@ -85,15 +98,8 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        FRONTEND_URL,
-        "https://course-recommender-five.vercel.app",
-    ],
-    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins temporarily
+    allow_credentials=False,  # Must be False when allow_origins="*"
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
