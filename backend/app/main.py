@@ -29,35 +29,25 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and seed if empty"""
     print("🚀 Starting application...")
     
     from app.database import engine, Base, SessionLocal
     from app.models.user import User
-    from app.models.course import Course
     from app.utils.security import get_password_hash
     
     # Create tables
-    print("📊 Creating tables...")
     Base.metadata.create_all(bind=engine)
+    print("✅ Tables created")
     
-    # Check if needs seeding
+    # Seed users if empty
     db = SessionLocal()
     try:
-        user_count = db.query(User).count()
-        course_count = db.query(Course).count()
-        
-        print(f"Found {user_count} users, {course_count} courses")
-        
-        if user_count == 0:
-            print("🌱 Seeding users...")
-            # Create test users
+        if db.query(User).count() == 0:
+            print("🌱 Creating test users...")
             test_users = [
                 ("user1", "user1@example.com", "Test@1234", "User One"),
                 ("user2", "user2@example.com", "Test@1234", "User Two"),
                 ("user3", "user3@example.com", "Test@1234", "User Three"),
-                ("user4", "user4@example.com", "Test@1234", "User Four"),
-                ("user5", "user5@example.com", "Test@1234", "User Five"),
             ]
             
             for username, email, password, full_name in test_users:
@@ -71,25 +61,27 @@ async def startup_event():
                 db.add(user)
             
             db.commit()
-            print("✅ 5 users created")
+            print("✅ 3 test users created!")
+        else:
+            print(f"✅ Database has {db.query(User).count()} users")
         
-        if course_count == 0:
+        # Seed courses too
+        from app.models.course import Course
+        if db.query(Course).count() == 0:
             print("🌱 Seeding courses...")
             try:
                 from app.seed_data import seed_database
                 seed_database(db)
                 print("✅ Courses seeded")
             except Exception as e:
-                print(f"⚠️ Course seeding error: {e}")
-        
-        print("✅ Database ready!")
-        
+                print(f"⚠️ Course seed error: {e}")
+                
     except Exception as e:
         print(f"⚠️ Startup error: {e}")
-        import traceback
-        traceback.print_exc()
     finally:
         db.close()
+    
+    print("✅ Application ready!")
 
 import os
 
