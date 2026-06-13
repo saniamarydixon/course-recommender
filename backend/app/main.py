@@ -36,12 +36,15 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://127.0.0.1:5173",
         FRONTEND_URL,
+        "https://course-recommender-five.vercel.app",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel deployments
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
