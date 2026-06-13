@@ -2,9 +2,13 @@ import axios from 'axios';
 
 // Use environment variable, fallback to localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000,
+  timeout: 60000, // 60 seconds (was 15000)
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
 // Add token to all requests
@@ -21,6 +25,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error);
+    if (error.code === 'ECONNABORTED') {
+      console.warn('Backend is waking up, please wait...');
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('access_token');

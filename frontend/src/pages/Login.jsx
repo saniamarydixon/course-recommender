@@ -177,8 +177,29 @@ export default function Login() {
                     transition: 'all 0.2s ease-in-out',
                   }}
                 >
-                  {loading ? 'Signing In...' : 'Login'}
+                  {loading ? 'Connecting to server...' : 'Login'}
                 </Button>
+
+                {loading && (
+                  <Typography
+                    variant="caption"
+                    align="center"
+                    sx={{
+                      color: '#64748b',
+                      fontWeight: 500,
+                      fontFamily: "'Outfit', sans-serif",
+                      mt: 1,
+                      display: 'block',
+                      animation: 'pulse 1.5s infinite ease-in-out',
+                      '@keyframes pulse': {
+                        '0%, 100%': { opacity: 0.6 },
+                        '50%': { opacity: 1 },
+                      }
+                    }}
+                  >
+                    Connecting to server... (This might take up to 30 seconds if the backend is waking up from sleep)
+                  </Typography>
+                )}
               </Box>
             </form>
 
