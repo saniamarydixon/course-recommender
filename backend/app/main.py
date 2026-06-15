@@ -29,53 +29,73 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    print("=" * 50)
-    print("🚀 Starting AI Course Recommender")
-    print("=" * 50)
+    print("🚀 Starting application...")
     
     from app.database import engine, Base, SessionLocal
     from app.models.user import User
     from app.models.course import Course
+    from app.utils.security import get_password_hash
     
-    # Create all tables
-    print("📊 Creating database tables...")
+    # Create tables
     Base.metadata.create_all(bind=engine)
-    print("✅ Tables ready")
+    print("✅ Tables created")
     
-    # Seed database if empty
+    # Auto-seed if empty
     db = SessionLocal()
     try:
-        user_count = db.query(User).count()
-        course_count = db.query(Course).count()
+        if db.query(User).count() == 0:
+            print("🌱 Seeding users...")
+            
+            test_users = [
+                {"username": "user1", "email": "user1@example.com", "password": "Test@1234", "full_name": "Sania User"},
+                {"username": "user2", "email": "user2@example.com", "password": "Test@1234", "full_name": "User Two"},
+                {"username": "user3", "email": "user3@example.com", "password": "Test@1234", "full_name": "User Three"},
+                {"username": "user4", "email": "user4@example.com", "password": "Test@1234", "full_name": "User Four"},
+                {"username": "user5", "email": "user5@example.com", "password": "Test@1234", "full_name": "User Five"},
+            ]
+            
+            for u in test_users:
+                user = User(
+                    username=u["username"],
+                    email=u["email"],
+                    hashed_password=get_password_hash(u["password"]),
+                    full_name=u["full_name"],
+                    is_active=True
+                )
+                db.add(user)
+            
+            db.commit()
+            print(f"✅ Created {len(test_users)} users")
         
-        print(f"📊 Current data: {user_count} users, {course_count} courses")
-        
-        if user_count == 0 or course_count == 0:
-            print("🌱 Database needs seeding...")
+        if db.query(Course).count() == 0:
+            print("🌱 Seeding courses...")
             try:
                 from app.seed_data import seed_database
-                seed_database(db)
-                print("✅ Database seeded successfully!")
-                
-                # Verify
-                final_users = db.query(User).count()
-                final_courses = db.query(Course).count()
-                print(f"✅ Final: {final_users} users, {final_courses} courses")
+                # Try calling seed function
+                seed_database(db) if callable(seed_database) else None
+                print("✅ Courses seeded")
             except Exception as e:
-                print(f"⚠️ Seeding error: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print("✅ Database already populated")
-            
+                print(f"⚠️ Course seed error: {e}")
+                # Fallback: create some sample courses
+                sample_courses = [
+                    {"title": "Python for Beginners", "category": "Programming", "level": "Beginner", "instructor": "John Doe", "price": 0, "duration_hours": 20, "rating": 4.5, "description": "Learn Python from scratch"},
+                    {"title": "React Mastery", "category": "Web Dev", "level": "Intermediate", "instructor": "Jane Smith", "price": 49.99, "duration_hours": 30, "rating": 4.7, "description": "Master React"},
+                    {"title": "Machine Learning Basics", "category": "ML", "level": "Beginner", "instructor": "Andrew Ng", "price": 79.99, "duration_hours": 40, "rating": 4.8, "description": "Introduction to ML"},
+                ]
+                for c in sample_courses:
+                    course = Course(**c)
+                    db.add(course)
+                db.commit()
+                print(f"✅ Created {len(sample_courses)} sample courses")
+                
     except Exception as e:
         print(f"⚠️ Startup error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
     
-    print("=" * 50)
-    print("✅ Application Ready!")
-    print("=" * 50)
+    print("✅ Application ready!")
 
 import os
 
