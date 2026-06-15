@@ -724,8 +724,9 @@ def main():
     finally:
         db.close()
 
-def seed_database(db: Session) -> None:
+def seed_database(db_session) -> None:
     """Seed the database with sample courses, users, and interactions."""
+    db = db_session
     try:
         # 1. Seed Users
         print("\nSeeding users...")

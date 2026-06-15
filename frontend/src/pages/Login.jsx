@@ -197,7 +197,7 @@ export default function Login() {
                       }
                     }}
                   >
-                    Connecting to server... (This might take up to 30 seconds if the backend is waking up from sleep)
+                    Connecting to server... This may take 30 seconds on first request
                   </Typography>
                 )}
               </Box>

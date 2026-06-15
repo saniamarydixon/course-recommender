@@ -20,19 +20,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle errors globally
+// Handle errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error);
     if (error.code === 'ECONNABORTED') {
-      console.warn('Backend is waking up, please wait...');
+      console.error('Server taking too long, please retry...');
     }
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login' && currentPath !== '/register') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
         window.location.href = '/login';
       }
     }

@@ -29,72 +29,75 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    print("🚀 Starting application...")
+    print("=" * 50)
+    print("🚀 Starting AI Course Recommender")
+    print("=" * 50)
     
     from app.database import engine, Base, SessionLocal
     from app.models.user import User
-    from app.utils.security import get_password_hash
+    from app.models.course import Course
     
-    # Create tables
+    # Create all tables
+    print("📊 Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    print("✅ Tables created")
+    print("✅ Tables ready")
     
-    # Seed users if empty
+    # Seed database if empty
     db = SessionLocal()
     try:
-        if db.query(User).count() == 0:
-            print("🌱 Creating test users...")
-            test_users = [
-                ("user1", "user1@example.com", "Test@1234", "User One"),
-                ("user2", "user2@example.com", "Test@1234", "User Two"),
-                ("user3", "user3@example.com", "Test@1234", "User Three"),
-            ]
-            
-            for username, email, password, full_name in test_users:
-                user = User(
-                    username=username,
-                    email=email,
-                    hashed_password=get_password_hash(password),
-                    full_name=full_name,
-                    is_active=True
-                )
-                db.add(user)
-            
-            db.commit()
-            print("✅ 3 test users created!")
-        else:
-            print(f"✅ Database has {db.query(User).count()} users")
+        user_count = db.query(User).count()
+        course_count = db.query(Course).count()
         
-        # Seed courses too
-        from app.models.course import Course
-        if db.query(Course).count() == 0:
-            print("🌱 Seeding courses...")
+        print(f"📊 Current data: {user_count} users, {course_count} courses")
+        
+        if user_count == 0 or course_count == 0:
+            print("🌱 Database needs seeding...")
             try:
                 from app.seed_data import seed_database
                 seed_database(db)
-                print("✅ Courses seeded")
-            except Exception as e:
-                print(f"⚠️ Course seed error: {e}")
+                print("✅ Database seeded successfully!")
                 
+                # Verify
+                final_users = db.query(User).count()
+                final_courses = db.query(Course).count()
+                print(f"✅ Final: {final_users} users, {final_courses} courses")
+            except Exception as e:
+                print(f"⚠️ Seeding error: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("✅ Database already populated")
+            
     except Exception as e:
         print(f"⚠️ Startup error: {e}")
     finally:
         db.close()
     
-    print("✅ Application ready!")
+    print("=" * 50)
+    print("✅ Application Ready!")
+    print("=" * 50)
 
 import os
 
-# Get frontend URL from environment
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+# Get allowed origins
+FRONTEND_URL = os.getenv('FRONTEND_URL', '')
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "https://course-recommender-five.vercel.app",
+]
+
+if FRONTEND_URL:
+    allowed_origins.append(FRONTEND_URL)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins temporarily
-    allow_credentials=False,  # Must be False when allow_origins="*"
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
