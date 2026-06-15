@@ -724,9 +724,11 @@ def main():
     finally:
         db.close()
 
-def seed_database(db_session) -> None:
+def seed_database(db_session=None) -> None:
     """Seed the database with sample courses, users, and interactions."""
-    db = db_session
+    from app.database import SessionLocal
+    db = db_session if db_session is not None else SessionLocal()
+    should_close = db_session is None
     try:
         # 1. Seed Users
         print("\nSeeding users...")
@@ -1077,10 +1079,12 @@ def seed_database(db_session) -> None:
             print(f"  - {cat:<15}: {count} courses")
         print("="*50 + "\n")
         print("Seeding completed successfully!")
-
     except Exception as e:
         db.rollback()
         raise e
+    finally:
+        if should_close:
+            db.close()
 
 
 def main():

@@ -35,6 +35,10 @@ export default function Login() {
     }
 
     setLoading(true);
+    const wakeUpToastTimeout = setTimeout(() => {
+      toast.info('Server is waking up, please wait...');
+    }, 5000);
+
     try {
       const response = await api.post('/auth/login', { email, password });
       const { access_token } = response.data;
@@ -48,9 +52,10 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.detail || 'Invalid email or password';
+      const errMsg = err.response?.data?.detail || err.userMessage || 'Invalid email or password';
       toast.error(errMsg);
     } finally {
+      clearTimeout(wakeUpToastTimeout);
       setLoading(false);
     }
   };
